@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <%- include('System/headIncludes.ejs') %>
+  <title>Cargas Portaria | ERP CINI</title>
+  <style>
+    .btn-icon-sm {
+      padding: 0 !important;
+      font-size: 0.55rem !important;
+      line-height: 1 !important;
+      border-radius: 0.15rem !important;
+      display: inline-flex !important;
+      align-items: center;
+      justify-content: center;
+        width: 32px !important;
+        height: 16px !important;
+        min-width: 32px !important;
+        min-height: 16px !important;
+      border-width: 1px !important;
+    }
+      .btn-icon-sm {
+        border-radius: 4px !important;
+      }
+    .btn-icon-sm i { margin: 0; font-size: 0.7rem !important; }
+    .btn-icon-sm:focus,
+    .btn-icon-sm:hover {
+      box-shadow: none !important;
+    }
+    .status-concluida { background: #d4edda !important; color: #155724 !important; font-weight: 600; padding:4px 8px; border-radius:4px; }
+    .status-pendente { background: #fff3cd !important; color: #856404 !important; font-weight: 600; padding:4px 8px; border-radius:4px; }
+    .status-nao-concluida { background: #f8d7da !important; color: #721c24 !important; font-weight: 600; padding:4px 8px; border-radius:4px; }
+  </style>
+</head>
+<body>
+  <div class="layout-container">
+    <%- include('partials/sidebar') %>
+    <div class="main-content">
+      <div class="topbar">
+        <div class="topbar-left">
+          <div class="page-info">
+            <h1>Cargas Portaria</h1>
+            <p>Lista de cargas disponíveis para registro na portaria</p>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <%- include('partials/userMenu') %>
+        </div>
+      </div>
+
+      <div class="content">
+        <% var pendingCount = (cargas && cargas.length) ? cargas.length : 0; %>
+        <% var concluidosCount = (typeof concluidos !== 'undefined') ? concluidos : 0; %>
+        <% var totalCargas = pendingCount + concluidosCount; %>
+        <% var totalPeso = 0; %>
+        <% cargas && cargas.forEach(function(r){ try{ totalPeso += parseFloat(String(r.PESO || 0).toString().replace(',','.')) || 0; }catch(_){ } }); %>
+          <% var hojeStart = new Date(); hojeStart.setHours(0,0,0,0); %>
+          <% var concluidos = (typeof concluidos !== 'undefined') ? concluidos : ((cargas || []).filter(function(r){ try{ var d = new Date(r.DT_ENTREG); return !isNaN(d) && d < new Date(); } catch(_){ return false; } }).length);
+          %>
+          <% var pendentes = totalCargas - concluidos;
+             var driversSet = new Set(), platesSet = new Set();
+             (cargas || []).forEach(function(r){ try{
+               var m = (r.MOTORISTA || r.motorista || ''), p = (r.PLACA || r.placa || '');
+               if (m && String(m).trim()) driversSet.add(String(m).trim());
+               if (p && String(p).trim()) platesSet.add(String(p).trim());
+             }catch(_){}});
+             var driversCount = driversSet.size || 0, platesCount = platesSet.size || 0;
+          %>
+
+        <div class="widgets-grid">
+          <div class="widget clickable-widget" onclick="window.location.href='/cargas-portaria'" style="cursor:pointer;">
+            <div class="widget-content"><h3><span id="totalCargas"><%= totalCargas %></span></h3><p>Total de Cargas</p></div>
+            <div class="widget-icon primary"><i class="bi bi-truck"></i></div>
+          </div>
+
+          <div class="widget clickable-widget" onclick="window.location.href='/cargas-portaria'" style="cursor:pointer;">
+            <div class="widget-content"><h3><span id="totalPeso"><%= (totalPeso || 0).toFixed(3) %></span></h3><p>Peso (kg)</p></div>
+            <div class="widget-icon info"><i class="bi bi-box-seam"></i></div>
+          </div>
+
+          <div class="widget clickable-widget" onclick="window.location.href='/cargas-portaria'" style="cursor:pointer;">
+            <div class="widget-content"><h3><span id="driversCount"><%= driversCount %></span></h3><p>Motoristas</p></div>
+            <div class="widget-icon success"><i class="bi bi-people"></i></div>
+          </div>
+
+          <div class="widget clickable-widget" onclick="window.location.href='/cargas-portaria'" style="cursor:pointer;">
+            <div class="widget-content"><h3><span id="platesCount"><%= platesCount %></span></h3><p>Placas Distintas</p></div>
+            <div class="widget-icon danger"><i class="bi bi-tags"></i></div>
+          </div>
+        </div>
+
+        <div class="card mt-20">
+          <div class="card-header">Cargas</div>
+          <div class="card-body">
+            <table id="cargasPortariaTable" class="table table-bordered custom-table" style="width:100%">
+              <thead>
+                <tr>
+                  <th>Filial</th>
+                  <th>Carga</th>
+                  <th>Data Entrega</th>
+                  <th>Status</th>
+                  <th>Placa</th>
+                  <th>Tipo Entrega</th>
+                  <th>Motorista</th>
+                  <th>Peso</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% if (cargas && cargas.length) { cargas.forEach(function(r){ %>
+                  <tr>
+                    <td><%= r.FILIAL %></td>
+                    <td><%= r.CARGA %></td>
+                    <td class="datetime-cell" title="<%= r.DT_ENTREG %>"><%= r.DT_ENTREG %></td>
+                    <td class="status-cell status-pendente">Pendente</td>
+                    <td><%= r.PLACA %></td>
+                    <td><%= r.TIPO_ENTREGA %></td>
+                    <td><%= r.MOTORISTA %></td>
+                    <td><%= r.PESO %></td>
+                    <td>
+                      <button type="button" class="btn btn-success btn-icon-sm concluirCargaBtn"
+                              data-filial="<%= (r.FILIAL||'') %>" data-carga="<%= (r.CARGA||'') %>"
+                              data-dt_entrega="<%= (r.DT_ENTREG_RAW || r.DT_ENTREG || '') %>" data-placa="<%= (r.PLACA||'') %>"
+                              data-tipo_entrega="<%= (r.TIPO_ENTREGA||'') %>" data-motorista="<%= (r.MOTORISTA||'') %>"
+                              data-peso="<%= (r.PESO||'') %>" title="Confirmar conclusão">
+                        <i class="fas fa-check"></i>
+                      </button>
+                    </td>
+                  </tr>
+                <% }); } %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="grid grid-2 mt-20">
+          <div class="card">
+            <div class="card-header">Progresso Geral das Cargas</div>
+            <div class="card-body">
+              <div style="margin-bottom:16px;">
+                <% var progresso = totalCargas > 0 ? Math.round((concluidos / totalCargas) * 100) : 0; %>
+                <div class="flex-between mb-10"><span style="font-size:13px;">Conclusão de Cargas</span><span style="font-size:13px;font-weight:600;"><span id="progressoPercent"><%= progresso %></span>%</span></div>
+                <div style="height:8px;background:var(--gray);border-radius:4px;overflow:hidden;">
+                  <div id="progressoBar" style="height:100%;background:var(--primary);width:<%= progresso %>%;transition:all 0.3s ease;"></div>
+                </div>
+              </div>
+              <table style="width:100%;font-size:13px;margin-top:16px;">
+                <tr><td style="padding:8px 0;border-bottom:1px solid var(--gray);">Concluídos</td><td style="padding:8px 0;border-bottom:1px solid var(--gray);text-align:right;font-weight:600;"><span id="concluidosCount"><%= concluidos %></span></td></tr>
+                <tr><td style="padding:8px 0;border-bottom:1px solid var(--gray);">Pendentes</td><td style="padding:8px 0;border-bottom:1px solid var(--gray);text-align:right;font-weight:600;"><span id="pendentesCount"><%= Math.max(0, pendentes) %></span></td></tr>
+                <tr><td style="padding:8px 0;">Total</td><td style="padding:8px 0;text-align:right;font-weight:600;"><span id="totalCargasCount"><%= totalCargas %></span></td></tr>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <%- include('System/bodyIncludes.ejs') %>
+
+  <div class="modal fade" id="modalConcluirCarga" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Confirmar Registro na Portaria</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p>Confirma registro desta carga na tabela de portaria?</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Não</button>
+          <button type="button" id="confirmConcluirCarga" class="btn btn-primary">Sim, registrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      try {
+        if (window.$ && $.fn && $.fn.DataTable) {
+          var dataTable = $('#cargasPortariaTable').DataTable({
+            autoWidth: false,
+            dom: "<'top'<'d-flex justify-content-between'<'dt-length'l><'d-flex justify-content-end align-items-center'<'dt-search'f><'dt-buttons ms-2'B>>>>rtip",
+            buttons: [
+              {
+                extend: 'excelHtml5',
+                text: '<i class="fas fa-file-excel"></i> Excel',
+                titleAttr: 'Exportar para Excel',
+                className: 'btn btn-success btn-sm'
+              }
+            ],
+            lengthMenu: [[5, 10, 25, -1], [5, 10, 25, 'Todos']],
+            pageLength: 10,
+            language: {
+              decimal: ",",
+              thousands: ".",
+              emptyTable: "Nenhum registro encontrado",
+              info: "Mostrando _START_ a _END_ de _TOTAL_ registros",
+              infoEmpty: "Mostrando 0 a 0 de 0 registros",
+              infoFiltered: "(filtrado de _MAX_ registros)",
+              lengthMenu: "Mostrar _MENU_ registros",
+              loadingRecords: "Carregando...",
+              processing: "Processando...",
+              search: "Pesquisar:",
+              zeroRecords: "Nenhum registro encontrado",
+              paginate: { first: "Primeiro", last: "Último", next: "Próximo", previous: "Anterior" }
+            }
+          });
+          try { dataTable.on('draw', formatDatetimeCells); } catch(_){ }
+        }
+      } catch(e) { console.error('DataTable init error:', e); }
+
+      // formatar colunas de data (lida com YYYY-MM-DD, YYYY-MM-DD HH:MM[:SS], ISO ou objetos Date)
+      function formatDatetimeCells() {
+        document.querySelectorAll('.datetime-cell').forEach(function(td){
+          try {
+            var raw = td.getAttribute('title') || td.textContent || '';
+            var formatted = raw;
+            if (typeof raw === 'string') {
+              var dtTimeMatch = raw.match(/(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/);
+              var dtOnlyMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+              if (dtTimeMatch) {
+                formatted = dtTimeMatch[3] + '/' + dtTimeMatch[2] + '/' + dtTimeMatch[1] + ' ' + dtTimeMatch[4] + ':' + dtTimeMatch[5];
+              } else if (dtOnlyMatch) {
+                formatted = dtOnlyMatch[3] + '/' + dtOnlyMatch[2] + '/' + dtOnlyMatch[1];
+              } else {
+                var d = new Date(raw);
+                if (!isNaN(d)) formatted = d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+              }
+            } else if (raw instanceof Date) {
+              var dd = String(raw.getDate()).padStart(2,'0');
+              var mm = String(raw.getMonth()+1).padStart(2,'0');
+              var yyyy = raw.getFullYear();
+              var hh = String(raw.getHours()).padStart(2,'0');
+              var min = String(raw.getMinutes()).padStart(2,'0');
+              formatted = dd + '/' + mm + '/' + yyyy + ' ' + hh + ':' + min;
+            }
+            td.textContent = formatted;
+            td.setAttribute('title', formatted);
+          } catch(_){ }
+        });
+      }
+
+      // run initial formatting once
+      try { formatDatetimeCells(); } catch(_){ }
+
+      // user initials
+      const userName = document.getElementById('userName');
+      if (userName) {
+        const name = '<%= user && user.nome ? user.nome : "Usuário" %>';
+        const initial = name.charAt(0).toUpperCase();
+        document.getElementById('userInitials').textContent = initial;
+        userName.textContent = name;
+      }
+
+      var selectedData = null;
+      var lastClickedBtn = null;
+      try {
+        var modalEl = document.getElementById('modalConcluirCarga');
+        var bsModal = modalEl ? new bootstrap.Modal(modalEl) : null;
+        var tableEl = document.getElementById('cargasPortariaTable');
+        if (tableEl) {
+          tableEl.addEventListener('click', function(e){
+            var btn = e.target.closest('.concluirCargaBtn');
+            if (!btn) return;
+            selectedData = {
+              filial: btn.getAttribute('data-filial'),
+              carga: btn.getAttribute('data-carga'),
+              dt_entrega: btn.getAttribute('data-dt_entrega'),
+              placa: btn.getAttribute('data-placa'),
+              tipo_entrega: btn.getAttribute('data-tipo_entrega'),
+              motorista: btn.getAttribute('data-motorista'),
+              peso: btn.getAttribute('data-peso')
+            };
+            lastClickedBtn = btn;
+            if (bsModal) bsModal.show();
+          });
+        }
+
+        var confirmBtn = document.getElementById('confirmConcluirCarga');
+        if (confirmBtn) confirmBtn.addEventListener('click', function(){
+          if (!selectedData) return;
+            fetch('/cargas-portaria/concluir', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type':'application/json' }, body: JSON.stringify(selectedData) })
+            .then(function(r){ return r.json(); })
+            .then(function(resp){
+                if (resp && resp.success) {
+                  if (bsModal) bsModal.hide();
+                  // remover a linha da tabela
+                  try {
+                    if (lastClickedBtn) {
+                      var tr = lastClickedBtn.closest('tr');
+                      if (tr) tr.remove();
+                    }
+                  } catch(_){ }
+
+                  // atualizar indicadores recalculando a partir da tabela atual
+                  try {
+                    // concluidos incrementa
+                    var conclEl = document.getElementById('concluidosCount');
+                    var pendEl = document.getElementById('pendentesCount');
+                    var totalEl = document.getElementById('totalCargasCount');
+                    var progEl = document.getElementById('progressoPercent');
+                    var progBar = document.getElementById('progressoBar');
+                    var totalCargasEl = document.getElementById('totalCargas');
+                    var totalPesoEl = document.getElementById('totalPeso');
+                    var driversEl = document.getElementById('driversCount');
+                    var platesEl = document.getElementById('platesCount');
+
+                    var conclu = parseInt(conclEl ? conclEl.textContent || '0' : '0', 10) || 0;
+                    conclu = conclu + 1;
+                    if (conclEl) conclEl.textContent = conclu;
+
+                    // recomputar pendentes, drivers, plates, peso, total
+                    var tbody = document.querySelector('#cargasPortariaTable tbody');
+                    var rows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+                    var pending = rows.length;
+                    // drivers and plates sets
+                    var dSet = new Set(); var pSet = new Set(); var pesoSum = 0;
+                    rows.forEach(function(r){
+                      try {
+                        var cols = r.querySelectorAll('td');
+                        var motorista = cols[5] ? (cols[5].textContent||'').trim() : '';
+                        var pesoText = cols[6] ? (cols[6].textContent||'').trim() : '';
+                        var placa = cols[3] ? (cols[3].textContent||'').trim() : '';
+                        if (motorista) dSet.add(motorista);
+                        if (placa) pSet.add(placa);
+                        var n = parseFloat(String(pesoText).replace(',','.') || '0'); if (!isNaN(n)) pesoSum += n;
+                      } catch(_){ }
+                    });
+
+                    if (pendEl) pendEl.textContent = pending;
+                    if (totalEl) totalEl.textContent = (pending + conclu);
+                    if (totalCargasEl) totalCargasEl.textContent = (pending + conclu);
+                    if (totalPesoEl) totalPesoEl.textContent = pesoSum.toFixed(3);
+                    if (driversEl) driversEl.textContent = dSet.size || 0;
+                    if (platesEl) platesEl.textContent = pSet.size || 0;
+
+                    var prog = (pending + conclu) > 0 ? Math.round((conclu / (pending + conclu)) * 100) : 0;
+                    if (progEl) progEl.textContent = prog;
+                    if (progBar) progBar.style.width = prog + '%';
+                  } catch(_){ }
+
+                } else {
+                  alert('Erro ao registrar carga');
+                }
+              }).catch(function(err){ console.error(err); alert('Erro ao registrar carga'); });
+          });
+        } catch(_){ }
+    });
+  </script>
+</body>
+</html>

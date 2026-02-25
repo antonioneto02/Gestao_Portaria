@@ -10,7 +10,7 @@ const dbConfig = require('./config/database');
 const dbProtheus = require('./config/dbConfigProtheus');
 const dbDw = require('./config/dbConfigDw');
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT;
 
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
@@ -314,7 +314,7 @@ app.post('/agendamentos/:id/concluir', ensureAuth, express.json(), async (req, r
               reqNotif.input('params', sql.VarChar(2000), null);
               reqNotif.input('status', sql.VarChar(50), 'PENDENTE');
               reqNotif.input('metadados', sql.VarChar(4000), JSON.stringify({ agendamento_id: ag.id, concluido_por: marcadoPor }));
-              const insertNotif = `INSERT INTO [dw].[dbo].[FATO_FILA_NOTIFICACOES_DEV] (TIPO_MENSAGEM, DESTINATARIO, MENSAGEM, TEMPLATE_NAME, TEMPLATE_PARAMS, STATUS, TENTATIVAS, ERRO, DTINC, DTENVIO, MESSAGE_ID, METADADOS)
+              const insertNotif = `INSERT INTO [dw].[dbo].[FATO_FILA_NOTIFICACOES] (TIPO_MENSAGEM, DESTINATARIO, MENSAGEM, TEMPLATE_NAME, TEMPLATE_PARAMS, STATUS, TENTATIVAS, ERRO, DTINC, DTENVIO, MESSAGE_ID, METADADOS)
                                    VALUES (@tipo, @dest, @mensagem, @template, @params, @status, 0, NULL, GETDATE(), NULL, NULL, @metadados)`;
               await reqNotif.query(insertNotif);
             } catch (e) {
@@ -838,7 +838,7 @@ app.post('/agendamentos', ensureAuth, express.json(), async (req, res) => {
           reqNotif.input('status', sql.VarChar(50), statusMsg);
           reqNotif.input('metadados', sql.VarChar(4000), metadata);
 
-          const insertNotif = `INSERT INTO [dw].[dbo].[FATO_FILA_NOTIFICACOES_DEV] (TIPO_MENSAGEM, DESTINATARIO, MENSAGEM, TEMPLATE_NAME, TEMPLATE_PARAMS, STATUS, TENTATIVAS, ERRO, DTINC, DTENVIO, MESSAGE_ID, METADADOS)
+          const insertNotif = `INSERT INTO [dw].[dbo].[FATO_FILA_NOTIFICACOES] (TIPO_MENSAGEM, DESTINATARIO, MENSAGEM, TEMPLATE_NAME, TEMPLATE_PARAMS, STATUS, TENTATIVAS, ERRO, DTINC, DTENVIO, MESSAGE_ID, METADADOS)
                                VALUES (@tipo, @dest, @mensagem, @template, @params, @status, 0, NULL, GETDATE(), NULL, NULL, @metadados)`;
           await reqNotif.query(insertNotif);
         } finally {

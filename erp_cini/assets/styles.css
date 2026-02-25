@@ -120,18 +120,20 @@ body {
   border-left: 3px solid transparent;
   transition: all 0.12s ease;
   font-size: 12px;
+  border-radius: 8px;
+  transition: background-color 0.12s ease, border-left-color 0.12s ease, color 0.12s ease;
 }
 
 .nav-item:hover {
-  background: var(--primary-light);
-  border-left-color: var(--primary);
-  color: var(--primary);
+  background: #D11F3F; /* solid red */
+  border-left-color: #D11F3F;
+  color: #ffffff !important;
 }
 
 .nav-item.active {
-  background: var(--primary-light);
-  border-left-color: var(--primary);
-  color: var(--primary);
+  background: #D11F3F; /* solid red when active */
+  border-left-color: #D11F3F;
+  color: #ffffff !important;
   font-weight: 600;
 }
 
@@ -140,6 +142,18 @@ body {
   text-align: center;
   font-size: 14px;
   flex-shrink: 0;
+}
+
+/* Force sidebar texts and icons to white and make text bold */
+.sidebar .nav-item,
+.sidebar .nav-label,
+.sidebar .nav-text,
+.sidebar .sidebar-title {
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+.sidebar .nav-item i {
+  color: #ffffff !important;
 }
 
 /* hide labels when collapsed */
@@ -172,6 +186,35 @@ body {
 /* hide title entirely when collapsed */
 .sidebar:not(:hover) .title-text { display:none; }
 
+/* Sidebar background image placed under the logo */
+.sidebar::before {
+  content: "";
+  position: absolute;
+  inset: 0; /* top:0; right:0; bottom:0; left:0; */
+  background-image: url('/css/imagemazul.png');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+  /* show image fully (no transparency or color filters) */
+  opacity: 1;
+  filter: none;
+  z-index: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, background-size 0.18s ease;
+}
+
+/* Raise actual sidebar content above the background layer */
+.sidebar > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Slightly stronger visibility when expanded */
+.sidebar:hover::before {
+  opacity: 0.95;
+  filter: saturate(1) brightness(1);
+}
+
 /* adjust main content margin when sidebar collapsed/expanded */
 .main-content {
   margin-left: 56px;
@@ -185,6 +228,18 @@ body {
 .sidebar:hover ~ .main-content {
   margin-left: 200px;
 }
+
+/* Sidebar footer (logout) stuck to bottom */
+.sidebar-footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 12px;
+  padding: 0 8px;
+  z-index: 1;
+}
+.sidebar-footer .nav-item { justify-content: center; }
+.sidebar:hover .sidebar-footer .nav-item { justify-content: flex-start; }
 
 /* Scrollbar customizado */
 .sidebar::-webkit-scrollbar {
@@ -931,6 +986,24 @@ i {
 }
 
 .icon-primary { color: var(--primary); }
+
+/* small delete button used in tables */
+.btn-excluir-carga {
+  padding: 0 !important;
+  font-size: 0.55rem !important;
+  line-height: 1 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 32px !important;
+  height: 16px !important;
+  min-width: 32px !important;
+  min-height: 16px !important;
+  border-radius: 4px !important;
+  border-width: 1px !important;
+}
+.btn-excluir-carga i { font-size: 0.7rem !important; line-height: 1 !important; }
+.custom-table th.actions-col, .custom-table td.actions-col { min-width: 40px !important; max-width: 40px !important; width: 40px !important; padding: 4px !important; }
 .icon-success { color: var(--success); }
 .icon-warning { color: var(--warning); }
 .icon-danger { color: var(--danger); }
@@ -1133,4 +1206,17 @@ i {
 .sidebar:not(:hover) .sidebar-user {
   justify-content: center;
   padding: 16px 0 8px 0;
+}
+
+/* Ensure links inside nav items are not underlined on hover/focus/active */
+.nav-item,
+.nav-item a,
+.sidebar .nav-item a {
+  text-decoration: none !important;
+}
+.nav-item a:hover,
+.nav-item a:focus,
+.nav-item:hover a {
+  text-decoration: none !important;
+  color: inherit;
 }

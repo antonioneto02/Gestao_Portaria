@@ -423,6 +423,11 @@ app.get('/listagem/cargas-portaria', ensureAuth, async (req, res) => {
   }
 });
 
+// Backwards-compatible route: support /cadastro/cargas-portaria (redirect to existing listagem)
+app.get('/cadastro/cargas-portaria', ensureAuth, (req, res) => {
+  return res.redirect('/listagem/cargas-portaria');
+});
+
 app.get('/cargas-portaria', ensureAuth, async (req, res) => {
   try {
     const pool = await new sql.ConnectionPool(dbDw).connect();
@@ -533,6 +538,24 @@ app.post('/cargas-portaria/concluir', ensureAuth, express.json(), async (req, re
   } catch (err) {
     console.error('Erro ao registrar carga na CARGAS_PORTARIA:', err && err.message ? err.message : err);
     return res.status(500).json({ success: false, message: 'Erro ao registrar carga' });
+  }
+});
+
+app.post('/cargas-portaria/delete', ensureAuth, express.json(), async (req, res) => {
+  try {
+    const id = req.body && req.body.id ? parseInt(req.body.id, 10) : null;
+    if (!id) return res.status(400).json({ success: false, message: 'ID inválido' });
+    const poolDw = await new sql.ConnectionPool(dbDw).connect();
+    try {
+      const q = 'DELETE FROM [dw].[dbo].[CARGAS_PORTARIA] WHERE id = @id';
+      await poolDw.request().input('id', sql.Int, id).query(q);
+      return res.json({ success: true });
+    } finally {
+      try { await poolDw.close(); } catch(_){ }
+    }
+  } catch (err) {
+    console.error('Erro ao excluir carga:', err && err.message ? err.message : err);
+    return res.status(500).json({ success: false, message: 'Erro ao excluir registro' });
   }
 });
 
@@ -833,6 +856,25 @@ app.post('/agendamentos', ensureAuth, express.json(), async (req, res) => {
   } catch (err) {
     console.error('Erro ao salvar agendamento:', err);
     return res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+// Delete agendamento
+app.post('/agendamentos/delete', ensureAuth, express.json(), async (req, res) => {
+  try {
+    const id = req.body && req.body.id ? parseInt(req.body.id, 10) : null;
+    if (!id) return res.status(400).json({ success: false, message: 'ID inválido' });
+    const poolDw = await new sql.ConnectionPool(dbDw).connect();
+    try {
+      const q = 'DELETE FROM [dw].[dbo].[AGENDAMENTO_PORTAL] WHERE id = @id';
+      await poolDw.request().input('id', sql.Int, id).query(q);
+      return res.json({ success: true });
+    } finally {
+      try { await poolDw.close(); } catch(_){ }
+    }
+  } catch (err) {
+    console.error('Erro ao excluir agendamento:', err && err.message ? err.message : err);
+    return res.status(500).json({ success: false, message: 'Erro ao excluir agendamento' });
   }
 });
 

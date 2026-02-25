@@ -6,9 +6,7 @@
     </div>
     <div class="sidebar-title"><span class="title-text">ERP CINI</span></div>
   </div>
-
-
-
+  
   <nav class="sidebar-nav">
     <div class="nav-section">
       <span class="nav-label nav-text">Principal</span>
@@ -20,17 +18,11 @@
     <div class="nav-section">
       <span class="nav-label nav-text">Cadastros</span>
       <a class="nav-item <%= currentPath && currentPath.startsWith('/agendamentos') ? 'active' : '' %>" href="/agendamentos"><i class="bi bi-pencil"></i> <span class="nav-text">Agendamentos</span></a>
+      <a class="nav-item <%= currentPath && currentPath.startsWith('/cadastro/cargas-portaria') ? 'active' : '' %>" href="/cadastro/cargas-portaria"><i class="bi bi-list"></i> <span class="nav-text">Cargas Portaria</span></a>
     </div>
-
     <hr class="sidebar-divider">
-    <div class="nav-section">
-      <span class="nav-label nav-text">Listagens</span>
-      <a class="nav-item <%= currentPath && currentPath.startsWith('/listagem/cargas-portaria') ? 'active' : '' %>" href="/listagem/cargas-portaria"><i class="bi bi-list"></i> <span class="nav-text">Cargas Portaria</span></a>
-    </div>
-
-    <hr class="sidebar-divider">
-    <div class="nav-section">
-      <a class="nav-item" href="/logout"><i class="bi bi-door-open"></i> <span class="nav-text">Sair</span></a>
-    </div>
   </nav>
+  <div class="sidebar-footer">
+    <a class="nav-item" href="/logout"><i class="bi bi-door-open"></i> <span class="nav-text">Sair</span></a>
+  </div>
 </aside>

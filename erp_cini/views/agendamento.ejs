@@ -103,6 +103,7 @@
                   <% for(let i=0;i<ordered.length;i++){ const k = ordered[i]; %>
                     <th><%= k.replace(/_/g,' ').replace(/\b\w/g, l=>l.toUpperCase()) %></th>
                   <% } %>
+                  <th class="actions-col">Ações</th>
                 <% } else { %>
                   <th>ID</th>
                   <th>Data / Hora</th>
@@ -113,6 +114,7 @@
                   <th>Telefone</th>
                   <th>CPF/CNPJ</th>
                   <th>Status</th>
+                  <th class="actions-col">Ações</th>
                 <% } %>
               </tr>
             </thead>
@@ -168,6 +170,11 @@
                     %>
                       <td class="cell-tooltip <%= (col && (col.toLowerCase()==='data_hora' || col.toLowerCase().includes('data') || col.toLowerCase().includes('hora') || col.toLowerCase().indexOf('dt_criacao')!==-1)) ? 'datetime-cell' : '' %> <%= extraClass %>" title="<%= display %>" data-dt="<%= raw %>"><%= display %></td>
                     <% }) %>
+                    <td class="actions-col text-center">
+                      <button type="button" class="btn btn-danger btn-icon-sm btn-excluir-carga btn-excluir-agendamento" data-id="<%= a.id %>" title="Excluir">
+                        <i class="fas fa-trash"></i>
+                      </button>
+                    </td>
                   </tr>
                 <% }) %>
               <% } %>
@@ -233,7 +240,6 @@
                     <label class="form-label">Nome</label>
                     <input type="text" id="nome" name="nome" class="form-control" required>
                   </div>
-                  <!-- Telefone e CPF/CNPJ preenchidos no momento da conclusão -->
                   <div class="col-md-6">
                     <label class="form-label">Responsável interno</label>
                     <div class="position-relative">
@@ -271,6 +277,23 @@
       </div>
     </div>
 
+    <div class="modal fade" id="confirmDeleteModalAgendamento" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Confirmar exclusão</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p>Tem certeza que deseja excluir este agendamento?</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="button" id="confirmDeleteAgendamento" class="btn btn-danger">Excluir</button>
+          </div>
+        </div>
+      </div>
+    </div>
     <%- include('System/bodyIncludes.ejs') %>
     <script>
       document.addEventListener('DOMContentLoaded', function(){
@@ -373,12 +396,10 @@
             responsavelObj = null;
           }
           function stripNonDigits(v){ return String(v||'').replace(/\D+/g,''); }
-
           const telEl = document.getElementById('telefone');
           const cpfEl = document.getElementById('cpf_cnpj');
           const telefoneRaw = telEl ? telEl.value : '';
           const cpfCnpjRaw = cpfEl ? cpfEl.value : '';
-
           const data = {
             tipo: document.getElementById('tipo').value,
             tipo_outro: document.getElementById('tipo_outro').value,
@@ -404,6 +425,38 @@
             }
           }).catch(err => { console.error(err); alert('Erro ao salvar'); });
         });
+
+        try {
+          var confirmEl = document.getElementById('confirmDeleteModalAgendamento');
+          var confirmModal = confirmEl ? new bootstrap.Modal(confirmEl) : null;
+          var deleteTargetId = null;
+          $('#dataTable').on('click', '.btn-excluir-agendamento', function(){
+            deleteTargetId = $(this).data('id');
+            if (confirmModal) confirmModal.show();
+          });
+          if (document.getElementById('confirmDeleteAgendamento')) {
+            document.getElementById('confirmDeleteAgendamento').addEventListener('click', function(){
+              if (!deleteTargetId) return;
+              fetch('/agendamentos/delete', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: deleteTargetId })
+              }).then(async function(res){
+                var ct = res.headers.get('content-type') || '';
+                var body = ct.indexOf('application/json') !== -1 ? await res.json() : await res.text();
+                if (res.ok && body && body.success) {
+                  location.reload();
+                } else {
+                  alert('Erro ao excluir: ' + (body && body.message || JSON.stringify(body)));
+                }
+              }).catch(function(e){ console.error(e); alert('Erro ao excluir'); }).finally(function(){
+                if (confirmModal) confirmModal.hide();
+                deleteTargetId = null;
+              });
+            });
+          }
+        } catch(_){ }
       });
     </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>

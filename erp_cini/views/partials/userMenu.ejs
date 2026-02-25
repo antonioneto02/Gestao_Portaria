@@ -1,0 +1,49 @@
+<div class="user-badge">
+  <div class="user-avatar dropdown">
+    <a href="#" class="user-avatar-link" id="userDropdown" role="button">
+      <div id="userInitials" class="user-initials"><%= (user && user.nome ? user.nome : 'Usuário').charAt(0).toUpperCase() %></div>
+    </a>
+    <div class="dropdown-menu user-dropdown" id="userDropdownMenu" style="display:none;">
+      <div class="dropdown-header text-center">
+        <i class="fas fa-user-circle fa-2x"></i>
+        <div class="user-info">
+          <span id="loggedUserName"><%= user && user.nome ? user.nome : 'Usuário' %></span>
+          <% if (user && user.id) { %>
+            <div class="user-id"><small class="text-muted"><i class="fas fa-id-card"></i> ID: <strong><%= user.id %></strong></small></div>
+          <% } %>
+          <% if (typeof grupoInfo !== 'undefined' && grupoInfo && grupoInfo.codigo) { %>
+            <div class="user-group"><small class="text-muted"><i class="fas fa-users"></i> Grupo: <strong><%= grupoInfo.codigo %> - <%= grupoInfo.nome || 'N/A' %></strong></small></div>
+          <% } %>
+        </div>
+      </div>
+      <div class="dropdown-divider"></div>
+      <a class="dropdown-item" href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a>
+      <a class="dropdown-item" href="#" id="closeBtn"><i class="fas fa-times"></i> Fechar</a>
+    </div>
+  </div>
+</div>
+<script>
+  (function(){
+    var toggle = document.getElementById('userDropdown');
+    var menu = document.getElementById('userDropdownMenu');
+    if (!toggle || !menu) return;
+    function closeMenu(){ menu.style.display = 'none'; toggle.classList.remove('open'); }
+    function openMenu(){ menu.style.display = 'block'; toggle.classList.add('open'); }
+    toggle.addEventListener('click', function(e){ e.preventDefault(); if (menu.style.display === 'block') closeMenu(); else openMenu(); });
+    document.addEventListener('click', function(e){ if (!toggle.contains(e.target) && !menu.contains(e.target)) closeMenu(); });
+    document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeMenu(); });
+    var closeItem = document.getElementById('closeBtn');
+    if (closeItem) {
+      closeItem.addEventListener('click', function(e){
+        e.preventDefault();
+        try {
+          if (window && typeof window.closeLogoutModal === 'function') {
+            window.closeLogoutModal();
+          } else {
+            closeMenu();
+          }
+        } catch(_) { closeMenu(); }
+      });
+    }
+  })();
+</script>

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Horários Agendamento</title>
+    <%- include('System/headIncludes.ejs') %>
+    <style>
+      .top-actions { display:flex; justify-content:flex-end; align-items:center; margin-bottom:12px; }
+      .custom-table td, .custom-table th { font-size:13px; }
+      .dataTables_wrapper .dt-length { margin-right: 8px; }
+      .dataTables_wrapper .dataTables_filter { margin: 0; }
+      .dataTables_wrapper .dataTables_filter label { display:flex; align-items:center; gap:8px; margin:0; }
+      .dataTables_wrapper .dt-buttons { display:flex; align-items:center; }
+      .dataTables_wrapper .dt-buttons .dt-button, .dataTables_wrapper .dt-buttons .btn { margin-left:16px; margin-top:6px; }
+      .status-concluido { background: #d4edda !important; color: #155724 !important; font-weight: bold; }
+      .status-pendente { background: #fff3cd !important; color: #856404 !important; font-weight: bold; }
+      .actions-col, td.actions-col { max-width: none !important; white-space: nowrap !important; overflow: visible !important; text-overflow: clip !important; }
+    </style>
+  </head>
+  <body>
+    <div class="layout-container">
+      <%- include('partials/sidebar') %>
+      <div class="main-content">
+        <div class="topbar">
+          <div class="topbar-left">
+              <div class="page-info">
+              <h1>Horários Agendamento</h1>
+              <p>Registros em HORARIOS_AGENDAMENTO</p>
+            </div>
+          </div>
+          <div class="topbar-right">
+            <%- include('partials/userMenu') %>
+          </div>
+        </div>
+
+        <div class="content p-3">
+          <% var pedidosSet = new Set(); var clientesSet = new Set(); var usersSet = new Set(); (agendamentos||[]).forEach(function(r){ try{ if (r.pedido && String(r.pedido).trim()) pedidosSet.add(String(r.pedido).trim()); if (r.nome_cli && String(r.nome_cli).trim()) clientesSet.add(String(r.nome_cli).trim()); if (r.criado_por && String(r.criado_por).trim()) usersSet.add(String(r.criado_por).trim()); }catch(_){} }); %>
+          <div class="widgets-grid mb-4">
+            <div class="widget">
+              <div class="widget-content"><h3><%= agendamentos ? agendamentos.length : 0 %></h3><p>Total de Registros</p></div>
+              <div class="widget-icon primary"><i class="bi bi-list"></i></div>
+            </div>
+            <div class="widget">
+              <div class="widget-content"><h3><span id="clientsCount"><%= clientesSet.size || 0 %></span></h3><p>Clientes Distintos</p></div>
+              <div class="widget-icon danger"><i class="bi bi-people"></i></div>
+            </div>
+            <div class="widget">
+              <div class="widget-content"><h3><span id="pedidosCount"><%= pedidosSet.size || 0 %></span></h3><p>Pedidos Distintos</p></div>
+              <div class="widget-icon success"><i class="bi bi-bag"></i></div>
+            </div>
+            <div class="widget">
+              <div class="widget-content"><h3><span id="usersCount"><%= usersSet.size || 0 %></span></h3><p>Usuários</p></div>
+              <div class="widget-icon info"><i class="bi bi-person"></i></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-body">
+              <table id="dataTable" class="table table-bordered custom-table" style="width:100%">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Pedido</th>
+                    <th>Data</th>
+                    <th>Nome Cliente</th>
+                    <th>Cod Cliente</th>
+                    <th>Categoria</th>
+                    <th>Observação</th>
+                    <th>Criado Por</th>
+                    <th>Status</th>
+                    <th>Data Entrada</th>
+                    <th>Data Saída</th>
+                    <th>Dt Criação</th>
+                    <th class="actions-col">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% if (agendamentos && agendamentos.length) { agendamentos.forEach(function(r){ %>
+                    <tr>
+                      <td class="cell-tooltip" title="<%= r.id %>"><%= r.id %></td>
+                      <td class="cell-tooltip" title="<%= r.pedido %>"><%= r.pedido %></td>
+                      <td class="cell-tooltip datetime-cell" title="<%= r.data %>" data-dt="<%= r.data %>"><%= r.data %></td>
+                      <td class="cell-tooltip" title="<%= r.nome_cli %>"><%= r.nome_cli %></td>
+                      <td class="cell-tooltip" title="<%= r.cod_cli %>"><%= r.cod_cli %></td>
+                      <td class="cell-tooltip" title="<%= r.categoria %>"><%= r.categoria %></td>
+                      <td class="cell-tooltip" title="<%= r.observacao %>"><%= r.observacao %></td>
+                      <td class="cell-tooltip" title="<%= r.criado_por %>"><%= r.criado_por %></td>
+                      <td class="cell-tooltip status-cell <%= (r.status && String(r.status).toLowerCase().indexOf('concl')!==-1) ? 'status-concluido' : 'status-pendente' %>" title="<%= r.status %>"><%= r.status %></td>
+                      <td class="cell-tooltip datetime-cell" title="<%= r.data_entrada %>" data-dt="<%= r.data_entrada %>"><%= r.data_entrada %></td>
+                      <td class="cell-tooltip datetime-cell" title="<%= r.data_saida %>" data-dt="<%= r.data_saida %>"><%= r.data_saida %></td>
+                      <td class="cell-tooltip datetime-cell" title="<%= r.dt_criacao %>" data-dt="<%= r.dt_criacao %>"><%= r.dt_criacao %></td>
+                      <td class="actions-col text-center">
+                        <button type="button" class="btn btn-danger btn-icon-sm btn-excluir-agendamento" data-id="<%= r.id %>" title="Excluir">
+                          <i class="fas fa-trash"></i>
+                        </button>
+                      </td>
+                    </tr>
+                  <% }); } %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card mt-3 mb-4">
+            <div class="card-header">Gráficos</div>
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-6"><canvas id="chartStatus"></canvas></div>
+                <div class="col-md-6"><canvas id="chartCategoria"></canvas></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <%- include('System/bodyIncludes.ejs') %>
+    <div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header"><h5 class="modal-title">Confirmar Exclusão</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+          <div class="modal-body"><p id="confirmDeleteMessage">Tem certeza que deseja excluir este registro?</p></div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="button" id="confirmDeleteBtn" class="btn btn-danger">Excluir</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      window.agendamentosData = <%- JSON.stringify(agendamentos || []) %>;
+      document.addEventListener('DOMContentLoaded', function(){
+        try { if (window.$ && $.fn && $.fn.DataTable) { var dt = $('#dataTable').DataTable({ autoWidth:false, dom: "<'top'<'d-flex justify-content-between'<'dt-length'l><'d-flex justify-content-end align-items-center'<'dt-search'f><'dt-buttons ms-2'B>>>>rtip", buttons:[{ extend:'excelHtml5', text:'<i class="fas fa-file-excel"></i> Excel', className:'btn btn-success btn-sm' }], lengthMenu:[[5,10,25,-1],[5,10,25,'Todos']], pageLength:10 }); try{ dt.on('draw', function(){ formatDatetimeCells('.datetime-cell'); }); }catch(_){ } 
+            try {
+              try { createColumnFilter('#dataTable','Pedido'); } catch(_){}
+              try { createColumnFilter('#dataTable','Nome Cliente'); } catch(_){}
+              try { createColumnFilter('#dataTable','Status'); } catch(_){}
+              try{
+                var $cf = $('#dataTable').prev('.column-filters');
+                if ($cf && $cf.length) {
+                  $cf.css({ 'overflow-x': 'hidden', 'flex-wrap': 'nowrap', 'gap': '6px' });
+                  $cf.find('input').css({ 'min-width': '120px', 'width': 'auto', 'flex': '0 0 auto' });
+                }
+              }catch(_){ }
+            } catch(_){ }
+          } } catch(e){console.error(e);} 
+        var deleteTargetId = null; var deleteModal = null;
+        $(document).on('click', '.btn-excluir-agendamento', function(){ deleteTargetId = $(this).data('id'); $('#confirmDeleteMessage').text('Confirma exclusão do registro ID ' + deleteTargetId + '?'); var el = document.getElementById('confirmDeleteModal'); try { deleteModal = new bootstrap.Modal(el); deleteModal.show(); } catch(e){ $('#confirmDeleteModal').modal('show'); } });
+        $('#confirmDeleteBtn').on('click', function(){ var id = deleteTargetId; if (!id) return; var $btn = $(this); $btn.prop('disabled', true).text('Excluindo...'); fetch('/horarios-agendamento/delete', { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: id }) }).then(function(r){ return r.json(); }).then(function(resp){ if (resp && resp.success) { try { if (deleteModal) deleteModal.hide(); else $('#confirmDeleteModal').modal('hide'); } catch(_){ $('#confirmDeleteModal').modal('hide'); } location.reload(); } else { alert('Erro ao excluir'); } }).catch(function(err){ console.error(err); alert('Erro ao excluir'); }).finally(function(){ $btn.prop('disabled', false).text('Excluir'); }); });
+        function formatDatetimeCells(selector){
+          selector = selector || '.datetime-cell';
+          document.querySelectorAll(selector).forEach(function(td){
+            try{
+              var raw = td.getAttribute('data-dt') || td.getAttribute('title') || td.textContent || '';
+              var formatted = raw;
+              if (typeof raw === 'string'){
+                var m = raw.match(/(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
+                if (m) formatted = m[3] + '/' + m[2] + '/' + m[1] + ' ' + m[4] + ':' + m[5];
+                else { var d = new Date(raw); if (!isNaN(d)) formatted = d.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }); }
+              }
+              td.textContent = formatted;
+              td.setAttribute('title', formatted);
+            }catch(_){ }
+          });
+        }
+        try{ formatDatetimeCells('.datetime-cell'); }catch(_){ }
+        try {
+          const ags = window.agendamentosData || [];
+          const statusCounts = {}; const categoriaCounts = {};
+          ags.forEach(function(r){ var st = (r.status||'Pendente'); statusCounts[st] = (statusCounts[st]||0)+1; var cat = (r.categoria||'Outro'); categoriaCounts[cat] = (categoriaCounts[cat]||0)+1; });
+          function mkChart(id,type,labels,data){ var el = document.getElementById(id); if(!el) return; new Chart(el,{ type:type, data:{ labels:labels, datasets:[{ label:'', data:data, backgroundColor: labels.map((_,i)=>['#007bff','#28a745','#ffc107','#dc3545'][i%4]) }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} } }); }
+          mkChart('chartStatus','doughnut',Object.keys(statusCounts), Object.keys(statusCounts).map(k=>statusCounts[k]));
+          mkChart('chartCategoria','bar',Object.keys(categoriaCounts), Object.keys(categoriaCounts).map(k=>categoriaCounts[k]));
+        } catch(e){}
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  </body>
+</html>

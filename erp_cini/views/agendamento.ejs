@@ -366,6 +366,18 @@
         }
         try{ if (dataTable && dataTable.on) dataTable.on('draw', function(){ formatDatetimeCells('.datetime-cell'); }); }catch(_){ }
         try { formatDatetimeCells('.datetime-cell'); } catch(_){ }
+        try {
+          createColumnFilter('#dataTable','Nome');
+          createColumnFilter('#dataTable','Status');
+          createColumnFilter('#dataTable','Data / Hora');
+          try{
+            var $cf = $('#dataTable').prev('.column-filters');
+            if ($cf && $cf.length) {
+              $cf.css({ 'overflow-x': 'hidden', 'flex-wrap': 'nowrap', 'gap': '6px' });
+              $cf.find('input').css({ 'min-width': '120px', 'width': 'auto', 'flex': '0 0 auto' });
+            }
+          }catch(_){ }
+        } catch(_){ }
 
         const modalEl = document.getElementById('modalAgendamento');
         const bsModal = new bootstrap.Modal(modalEl);

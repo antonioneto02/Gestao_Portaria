@@ -251,3 +251,207 @@ window.fetch = function(...args) {
   });
 };
 </script>
+<style>
+/* Searchable dropdown styling to match desired appearance */
+.dropdown-menu.searchable-column{
+  box-shadow: 0 6px 18px rgba(0,0,0,0.12) !important;
+  border-radius: 6px !important;
+  border: 1px solid #e6e6e6 !important;
+  padding: 6px 0 !important;
+}
+.dropdown-menu.searchable-column .dropdown-item{
+  font-size: 15px !important;
+  padding: 10px 14px !important;
+  text-transform: uppercase !important;
+  line-height: 1.1 !important;
+  white-space: normal !important;
+  color: #222 !important;
+  border-bottom: 1px solid #f1f1f1 !important;
+}
+.dropdown-menu.searchable-column .dropdown-item:last-child{ border-bottom: none !important; }
+.dropdown-menu.searchable-column .dropdown-item:hover{ background:#f5f7fa !important; color:#000 !important; }
+.dropdown-menu.searchable-column::-webkit-scrollbar{ width: 10px; }
+.dropdown-menu.searchable-column::-webkit-scrollbar-thumb{ background:#cfcfcf; border-radius:6px; }
+.dropdown-menu.searchable-column{ max-height: 300px !important; }
+</style>
+<style>
+.dropdown-menu.searchable-column{ margin:0 !important; transform:none !important; box-sizing: border-box !important; }
+</style>
+<script>
+// Column filter helper: inserts a small text input above the table which filters the given column
+function findColumnIndexByName(tableSelector, name){
+  try{
+    var $ths = $(tableSelector).find('thead th');
+    var target = (name||'').toString().trim().toLowerCase();
+    var idx = -1;
+    $ths.each(function(i){ if ((($(this).text()||'').toString().trim().toLowerCase()) === target) { idx = i; return false; } });
+    return idx;
+  }catch(e){return -1;}
+}
+
+function createColumnFilter(tableSelector, columnName, opts){
+  opts = opts || {};
+  try{
+    var idx = findColumnIndexByName(tableSelector, columnName);
+    if (idx === -1) return;
+    var $table = $(tableSelector);
+    if (!$table || !$table.length) return;
+    var $container = $table.prev('.column-filters');
+    if (!$container.length){
+      $container = $('<div class="column-filters mb-2 d-flex gap-2 flex-nowrap" style="overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;"></div>');
+      $table.before($container);
+    }
+    var safeId = ('colfilter_' + columnName.replace(/[^a-z0-9]/gi,'_') + '_' + idx);
+    if ($container.find('#' + safeId).length) return;
+    var placeholder = opts.placeholder || columnName;
+    var $input = $('<input type="search" class="form-control form-control-sm" placeholder="' + placeholder + '" />').attr('id', safeId);
+    try{ $input.css({ 'min-width': '200px', 'flex': '0 0 auto' }); }catch(e){}
+    $container.append($input);
+    var table = $table.DataTable ? $table.DataTable() : null;
+    $input.on('input', function(){
+      try{
+        var v = $(this).val() || '';
+        if (table && table.column) { table.column(idx).search(v).draw(); }
+      }catch(e){}
+    });
+  }catch(e){}
+}
+
+// Create a searchable dropdown populated from DataTable column unique values
+function createSearchableDropdownColumn(tableSelector, columnIndex, inputSelector, opts) {
+  opts = opts || {};
+  try {
+    var $table = $(tableSelector);
+    if (!$table || !$table.length) return;
+    var tableInst = $table.DataTable ? $table.DataTable() : null;
+    if (!tableInst) return;
+    var $input = null;
+    if (typeof inputSelector === 'string') {
+      $input = $($table.prev('.column-filters').find('input[placeholder="' + inputSelector + '"]'));
+    } else {
+      $input = $(inputSelector);
+    }
+    if (!$input || !$input.length) return;
+    // ensure parent is positioned so absolute dropdown is visible and not clipped
+    var $parent = $input.parent();
+    try{ if ($parent && $parent.length) $parent.css('position', 'relative'); }catch(e){}
+    // remove existing dropdown in parent
+    $parent.find('.dropdown-menu.searchable-column').remove();
+    var $dropdown = $('<div class="dropdown-menu searchable-column" style="position:absolute; z-index:1200; display:none; background:white; border:1px solid #ccc; max-height:240px; overflow-y:auto;"></div>');
+    // append to parent so it won't be clipped by outer overflow:hidden
+    $parent.append($dropdown);
+    // gather unique values from column (normalize HTML cells)
+    var vals = tableInst.column(columnIndex).data().toArray().map(function(v){
+      try { return $('<div>').html(v).text().toString().trim(); } catch(e) { return (v||'').toString().trim(); }
+    }).filter(function(v){ return v !== ''; });
+    var uniq = Array.from(new Set(vals)).sort();
+    // add placeholder/clear
+    var $clear = $('<div class="dropdown-item text-muted">Digite ou selecione...</div>'); $clear.data('value',''); $dropdown.append($clear);
+    uniq.forEach(function(val){ var $it = $('<div class="dropdown-item"></div>'); $it.text(val); $it.data('value', val); $dropdown.append($it); });
+    // sizing and positioning
+    try{
+      var w = $input.outerWidth();
+      if (w && w > 0) { $dropdown.css('width', w + 'px'); }
+      $dropdown.css({ top: ($input.outerHeight() + 4) + 'px', left: 0 });
+    }catch(e){}
+    // events
+    $input.on('focus click', function(){ $dropdown.show(); });
+    $input.on('blur', function(){ setTimeout(function(){ $dropdown.hide(); }, 200); });
+    $input.on('input', function(){ var term = ($input.val()||'').toLowerCase(); $dropdown.find('.dropdown-item').each(function(){ var t = $(this).text().toLowerCase(); $(this).toggle(t.indexOf(term) !== -1); }); $dropdown.show(); });
+    $dropdown.on('click touchstart', '.dropdown-item', function(e){
+      var v = $(this).data('value');
+      $input.val(v || '');
+      $dropdown.hide();
+      try{ tableInst.column(columnIndex).search(v || '').draw(); }catch(e){}
+    });
+  } catch(e) {}
+}
+
+// Generic searchable dropdown that uses a hidden <select> as source when provided
+function createSearchableDropdown(inputId, selectId, columnIndex, tableSelector) {
+  try{
+    var $input = $('#' + inputId);
+    var $select = $('#' + selectId);
+    console.log('createSearchableDropdown init:', inputId, 'inputFound=', $input.length, 'selectFound=', $select.length, 'col=', columnIndex, 'tableSel=', tableSelector);
+    if ($input.length === 0) return;
+
+    // remove any previous dropdown for this input
+    $('.dropdown-menu.searchable-column[data-for="' + inputId + '"]').remove();
+
+    // decide append target: prefer .column-filters container so dropdown aligns exactly under input
+    var $appendTarget = null;
+    var $columnFilters = $input.closest('.column-filters');
+    if ($columnFilters && $columnFilters.length) {
+      $appendTarget = $columnFilters;
+      try{ $appendTarget.css('position','relative'); }catch(e){}
+    } else {
+      $appendTarget = $('body');
+    }
+    var $dropdown = $('<div class="dropdown-menu searchable-column" data-for="' + inputId + '" style="position:absolute; z-index:3000; display:none; background:white; border:1px solid #ccc; max-height:240px; overflow-y:auto; box-sizing:border-box;"></div>');
+    $appendTarget.append($dropdown);
+
+    // populate from select if available
+    if ($select && $select.length) {
+      $select.find('option').each(function(){ if ($(this).val() !== '') { var $item = $('<div class="dropdown-item"></div>'); $item.text($(this).text()); $item.data('value', $(this).val()); $dropdown.append($item); } });
+    }
+
+    // fallback to DataTable column values
+    if ($dropdown.children().length === 0 && typeof columnIndex === 'number' && tableSelector) {
+      try{
+        var tbl = $(tableSelector).DataTable();
+        var vals = tbl.column(columnIndex).data().toArray().map(function(v){ try { return $('<div>').html(v).text().toString().trim(); } catch(e){ return (v||'').toString().trim(); } }).filter(function(v){ return v !== ''; });
+        var uniq = Array.from(new Set(vals)).sort();
+        uniq.forEach(function(u){ var $it = $('<div class="dropdown-item"></div>'); $it.text(u); $it.data('value', u); $dropdown.append($it); });
+      }catch(e){}
+    }
+    console.log('createSearchableDropdown populated items=', $dropdown.children().length, 'for', inputId);
+
+    // helper to position dropdown under input
+    function positionDropdown(){
+      try{
+        var w = Math.max($input.outerWidth(), 120);
+        if ($appendTarget && $appendTarget.is('body')){
+          // body: use viewport coordinates
+          var rect = $input[0].getBoundingClientRect();
+          var left = rect.left + window.pageXOffset;
+          var top = rect.bottom + window.pageYOffset + 4;
+          $dropdown.css({ left: left + 'px', top: top + 'px', width: w + 'px' });
+        } else {
+          // positioned inside container: compute position relative to append target (accounts for padding/margins)
+          var inpOff = $input.offset();
+          var targetOff = $appendTarget.offset() || { left: 0, top: 0 };
+          var left = inpOff.left - targetOff.left;
+          var top = (inpOff.top - targetOff.top) + $input.outerHeight() + 4;
+          $dropdown.css({ left: left + 'px', top: top + 'px', width: w + 'px' });
+        }
+      }catch(e){}
+    }
+
+    // show/hide and events
+    $input.on('focus.createSearch', function(){ positionDropdown(); console.log('createSearchableDropdown show:', inputId); $dropdown.show(); });
+    $input.on('click.createSearch', function(){ positionDropdown(); $dropdown.show(); });
+    $input.on('blur.createSearch', function(){ setTimeout(function(){ console.log('createSearchableDropdown hide:', inputId); $dropdown.hide(); }, 200); });
+    $input.on('input.createSearch', function(){ var term = ($input.val()||'').toLowerCase(); $dropdown.find('.dropdown-item').each(function(){ var t = $(this).text().toLowerCase(); $(this).toggle(t.indexOf(term) !== -1); }); positionDropdown(); $dropdown.show(); });
+
+    // click on an item
+    $dropdown.on('click.createSearch touchstart.createSearch', '.dropdown-item', function(e){
+      var v = $(this).data('value');
+      var text = $(this).text() || '';
+      $input.val(text);
+      $dropdown.hide();
+      try{ if (tableSelector && typeof columnIndex === 'number') { var tbl = $(tableSelector).DataTable(); if (tbl) tbl.column(columnIndex).search(v || '').draw(); } }catch(e){}
+    });
+
+    // Enter pressed in input -> trigger search
+    $input.on('keypress.createSearch', function(e){ if (e.which === 13) { var searchTerm = $input.val(); try{ if (tableSelector && typeof columnIndex === 'number') { var tbl = $(tableSelector).DataTable(); if (tbl) tbl.column(columnIndex).search(searchTerm).draw(); } }catch(e){} $dropdown.hide(); } });
+
+    // reposition on scroll/resize
+    var repositionHandler = function(){ if ($dropdown.is(':visible')) positionDropdown(); };
+    $(window).on('scroll.createSearch resize.createSearch', repositionHandler);
+
+    // cleanup when input is removed from DOM
+    var mo = new MutationObserver(function(){ if (!$.contains(document, $input[0])) { $dropdown.remove(); $(window).off('scroll.createSearch resize.createSearch', repositionHandler); mo.disconnect(); } });
+    mo.observe(document.body, { childList: true, subtree: true });
+  }catch(e){}
+}
+</script>

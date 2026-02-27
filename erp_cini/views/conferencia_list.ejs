@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <%- include('System/headIncludes.ejs') %>
+  <title>Conferência | ERP CINI</title>
+</head>
+<body>
+  <div class="layout-container">
+    <%- include('partials/sidebar') %>
+    <div class="main-content">
+      <div class="topbar">
+        <div class="topbar-left">
+          <div class="page-info">
+            <h1>Conferência</h1>
+            <p>Lista de pessoas</p>
+          </div>
+        </div>
+        <div class="topbar-right"><%- include('partials/userMenu') %></div>
+      </div>
+      <div class="content">
+        <div class="card mt-20">
+          <div class="card-header">Conferência de Pessoas</div>
+          <div class="card-body">
+            <div class="mb-3 d-flex align-items-center gap-2">
+              <input id="conferenciaSearch" class="form-control" placeholder="Pesquisar por nome (buscará em toda a base)" style="max-width:380px;" />
+              <button id="conferenciaSearchBtn" class="btn btn-primary">Pesquisar</button>
+              <button id="conferenciaResetBtn" class="btn btn-secondary">Limpar</button>
+              <div id="conferenciaCount" style="margin-left:auto;font-size:13px;color:var(--muted);">Mostrando <strong><span id="conferenciaCountNum"><%= (people && people.length) ? people.length : 0 %></span></strong> registros</div>
+            </div>
+            <table id="conferenciaTable" class="table table-bordered custom-table" style="width:100%">
+              <thead>
+                <tr>
+                  <th>Filial</th>
+                  <th>Código</th>
+                  <th>Nome</th>
+                  <th>Telefone</th>
+                  <th>Email</th>
+                  <th>RG</th>
+                  <th>CNPJ</th>
+                  <th>Sexo</th>
+                  <th>Data Nasc.</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% if (people && people.length) { people.forEach(function(p){ %>
+                  <tr>
+                    <td><%= p.filial || '' %></td>
+                    <td><%= p.codigo || '' %></td>
+                    <td><%= p.nome || '' %></td>
+                    <td><%= p.telefone || '' %></td>
+                    <td><%= p.email || '' %></td>
+                    <td><%= p.rg || '' %></td>
+                    <td><%= p.cnpj || '' %></td>
+                    <td><%= p.sexo || '' %></td>
+                    <td>
+                      <% function formatBR(dateInput) {
+                           try {
+                             if (!dateInput) return '';
+                             var d = (typeof dateInput === 'string' && dateInput.indexOf('T') !== -1) ? new Date(dateInput) : new Date(String(dateInput));
+                             if (isNaN(d)) return String(dateInput);
+                             var dd = String(d.getDate()).padStart(2,'0');
+                             var mm = String(d.getMonth()+1).padStart(2,'0');
+                             var yyyy = d.getFullYear();
+                             var hh = String(d.getHours()).padStart(2,'0');
+                             var min = String(d.getMinutes()).padStart(2,'0');
+                             return dd + '/' + mm + '/' + yyyy + ', ' + hh + ':' + min;
+                           } catch(e){ return String(dateInput || ''); }
+                         }
+                         %>
+                         <%= formatBR(p.dataNascimento) %>
+                    </td>
+                  </tr>
+                <% }); } %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <%- include('System/bodyIncludes.ejs') %>
+    <script>
+      function formatBR(dateInput) {
+        try {
+          if (!dateInput) return '';
+          const d = (typeof dateInput === 'string' && dateInput.indexOf('T') !== -1) ? new Date(dateInput) : new Date(String(dateInput));
+          if (isNaN(d)) return String(dateInput);
+          const dd = String(d.getDate()).padStart(2,'0');
+          const mm = String(d.getMonth() + 1).padStart(2,'0');
+          const yyyy = d.getFullYear();
+          const hh = String(d.getHours()).padStart(2,'0');
+          const min = String(d.getMinutes()).padStart(2,'0');
+          return `${dd}/${mm}/${yyyy}, ${hh}:${min}`;
+        } catch(e){ return String(dateInput || ''); }
+      }
+    window.peopleData = <%- JSON.stringify(people || []) %>;
+    function cellHtml(raw, display, isDate) {
+      try {
+        var esc = String(display==null? '': display);
+        if (isDate) {
+          var rawVal = raw || display || '';
+          return '<span class="cell-tooltip datetime-cell" data-dt="'+String(rawVal).replace(/"/g,'&quot;')+'" title="'+esc.replace(/"/g,'&quot;')+'">'+esc+'</span>';
+        }
+        return '<span class="cell-tooltip" title="'+esc.replace(/"/g,'&quot;')+'">'+esc+'</span>';
+      } catch(e){ return String(display || ''); }
+    }
+    document.addEventListener('DOMContentLoaded', function(){
+      let dt = null;
+      function initDataTable(){
+        try{ if (window.$ && $.fn && $.fn.DataTable) {
+          if (dt) dt.destroy();
+          dt = $('#conferenciaTable').DataTable({ autoWidth:false, searching: false, dom: "<'top'<'d-flex justify-content-between'<'dt-length'l><'d-flex justify-content-end align-items-center'<'dt-buttons ms-2'B>>>>rtip", buttons:[{ extend:'excelHtml5', text:'<i class=\'fas fa-file-excel\'></i> Excel', className:'btn btn-success btn-sm' }], lengthMenu:[[10,25,50,-1],[10,25,50,'Todos']], pageLength:25, language:{ decimal: ",", thousands: ".", emptyTable: "Nenhum registro encontrado", info: "Mostrando _START_ a _END_ de _TOTAL_ registros", infoEmpty: "Mostrando 0 a 0 de 0 registros", infoFiltered: "(filtrado de _MAX_ registros)", lengthMenu: "Mostrar _MENU_ registros", loadingRecords: "Carregando...", processing: "Processando...", zeroRecords: "Nenhum registro encontrado", paginate: { first: "Primeiro", last: "Último", next: "Próximo", previous: "Anterior" } } });
+        }}catch(_){ }
+      }
+      initDataTable();
+
+      const searchEl = document.getElementById('conferenciaSearch');
+      const searchBtn = document.getElementById('conferenciaSearchBtn');
+      const resetBtn = document.getElementById('conferenciaResetBtn');
+      const countNum = document.getElementById('conferenciaCountNum');
+
+      function renderRows(rows){
+        const tbody = document.querySelector('#conferenciaTable tbody');
+        countNum.textContent = (rows || []).length;
+          if (dt && dt.clear && dt.row) {
+          dt.clear();
+          (rows || []).forEach(function(p){
+            dt.row.add([
+              cellHtml(p.filial || '', p.filial || ''),
+              cellHtml(p.codigo || '', p.codigo || ''),
+              cellHtml(p.nome || '', p.nome || ''),
+              cellHtml(p.telefone || '', p.telefone || ''),
+              cellHtml(p.email || '', p.email || ''),
+              cellHtml(p.rg || '', p.rg || ''),
+              cellHtml(p.cnpj || '', p.cnpj || ''),
+              cellHtml(p.sexo || '', p.sexo || ''),
+              cellHtml(p.dataNascimento || '', formatBR(p.dataNascimento || ''), true)
+            ]);
+          });
+          dt.draw();
+          return;
+        }
+        tbody.innerHTML = '';
+        (rows || []).forEach(function(p){
+          const tr = document.createElement('tr');
+          const vals = [
+            {raw: p.filial || '', disp: p.filial || ''},
+            {raw: p.codigo || '', disp: p.codigo || ''},
+            {raw: p.nome || '', disp: p.nome || ''},
+            {raw: p.telefone || '', disp: p.telefone || ''},
+            {raw: p.email || '', disp: p.email || ''},
+            {raw: p.rg || '', disp: p.rg || ''},
+            {raw: p.cnpj || '', disp: p.cnpj || ''},
+            {raw: p.sexo || '', disp: p.sexo || ''},
+            {raw: p.dataNascimento || '', disp: formatBR(p.dataNascimento || ''), isDate: true}
+          ];
+          vals.forEach(function(v){
+            const td = document.createElement('td');
+            if (v && v.isDate) {
+              td.className = 'cell-tooltip datetime-cell';
+              td.setAttribute('data-dt', v.raw || '');
+              td.setAttribute('title', v.disp || '');
+              td.textContent = v.disp || '';
+            } else {
+              td.className = 'cell-tooltip';
+              td.setAttribute('title', (v && v.disp) || '');
+              td.textContent = (v && v.disp) ? String(v.disp).trim() : '';
+            }
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+        initDataTable();
+      }
+
+      async function doSearch(q){
+        if (!q || !q.trim()) return;
+        searchBtn.disabled = true; resetBtn.disabled = true;
+        try{
+          const res = await fetch('/conferencia/search?q=' + encodeURIComponent(q));
+          const j = await res.json();
+          if (j && j.success) renderRows(j.data || []);
+        }catch(err){ console.error(err); alert('Erro ao buscar'); }
+        finally{ searchBtn.disabled = false; resetBtn.disabled = false; }
+      }
+
+      searchBtn.addEventListener('click', function(){ const q = searchEl.value || ''; if (!q) return alert('Informe um nome para buscar'); doSearch(q); });
+      searchEl.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); searchBtn.click(); } });
+      resetBtn.addEventListener('click', async function(){ 
+        resetBtn.disabled = true;
+        try{
+          const resp = await fetch('/conferencia/data'); const j = await resp.json(); if (j && j.success) { renderRows(j.data || []); }
+        }catch(e){ console.error(e); alert('Erro ao recarregar'); }
+        finally{ resetBtn.disabled = false; }
+      });
+      function formatDatetimeCells(selector){
+        selector = selector || '.datetime-cell';
+        document.querySelectorAll(selector).forEach(function(td){
+          try{
+            var raw = td.getAttribute('data-dt') || td.getAttribute('title') || td.textContent || '';
+            var formatted = raw;
+            if (typeof raw === 'string'){
+              var m = raw.match(/(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
+              if (m) formatted = m[3] + '/' + m[2] + '/' + m[1] + ' ' + m[4] + ':' + m[5];
+              else { var d = new Date(raw); if (!isNaN(d)) formatted = d.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }); }
+            }
+            td.textContent = formatted;
+            td.setAttribute('title', formatted);
+          }catch(_){ }
+        });
+      }
+      try{ if (dt && dt.on) dt.on('draw', function(){ formatDatetimeCells('.datetime-cell'); }); }catch(_){ }
+      try { formatDatetimeCells('.datetime-cell'); } catch(_){}
+    });
+  </script>
+</body>
+</html>

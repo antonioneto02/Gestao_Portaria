@@ -43,27 +43,25 @@
             var usersCount = usersSet.size || 0;
           %>
             <div class="widgets-grid mb-4">
-            <div class="widget clickable-widget" onclick="window.location.href='/cadastro/cargas-portaria'" style="cursor:pointer;">
+            <div class="widget clickable-widget" onclick="window.location.href='/listagem/cargas-portaria'" style="cursor:pointer;">
               <div class="widget-content"><h3><%= cargas ? cargas.length : 0 %></h3><p>Total de Registros</p></div>
               <div class="widget-icon primary"><i class="bi bi-list"></i></div>
             </div>
-            <div class="widget clickable-widget" onclick="window.location.href='/cadastro/cargas-portaria'" style="cursor:pointer;">
+            <div class="widget clickable-widget" onclick="window.location.href='/listagem/cargas-portaria'" style="cursor:pointer;">
               <div class="widget-content"><h3><span id="platesCountList"><%= platesCount %></span></h3><p>Placas Distintas</p></div>
               <div class="widget-icon danger"><i class="bi bi-tags"></i></div>
             </div>
-            <div class="widget clickable-widget" onclick="window.location.href='/cadastro/cargas-portaria'" style="cursor:pointer;">
+            <div class="widget clickable-widget" onclick="window.location.href='/listagem/cargas-portaria'" style="cursor:pointer;">
               <div class="widget-content"><h3><span id="driversCountList"><%= driversCount %></span></h3><p>Motoristas Distintos</p></div>
               <div class="widget-icon success"><i class="bi bi-people"></i></div>
             </div>
-            <div class="widget clickable-widget" onclick="window.location.href='/cadastro/cargas-portaria'" style="cursor:pointer;">
+            <div class="widget clickable-widget" onclick="window.location.href='/listagem/cargas-portaria'" style="cursor:pointer;">
               <div class="widget-content"><h3><span id="usersCountList"><%= usersCount %></span></h3><p>Usuários (Criado Por)</p></div>
               <div class="widget-icon info"><i class="bi bi-person"></i></div>
             </div>
           </div>
 
-          <div class="top-actions">
-            <button id="openCadastroBtn" class="btn btn-primary"><i class="fas fa-plus"></i> Cadastrar</button>
-          </div>
+          
 
           <div class="card">
             <div class="card-body">
@@ -90,19 +88,19 @@
                   <% if (cargas && cargas.length) { cargas.forEach(function(r){ %>
                     <% var _statusClass = ''; try { var _s = String(r.status||'').toLowerCase(); if (_s.indexOf('concl') !== -1) _statusClass = 'status-concluida'; else if (_s.indexOf('pend') !== -1) _statusClass = 'status-pendente'; else if (_s.indexOf('nao') !== -1 || _s.indexOf('não') !== -1) _statusClass = 'status-nao-concluida'; } catch(_) {} %>
                     <tr>
-                      <td><%= r.id %></td>
-                      <td><%= r.filial %></td>
-                      <td><%= r.carga %></td>
-                      <td class="datetime-cell" title="<%= r.dt_entrega %>"><%= r.dt_entrega %></td>
-                      <td><%= r.placa %></td>
-                      <td><%= r.tipo_entrega %></td>
-                      <td><%= r.motorista %></td>
-                      <td><%= r.peso %></td>
-                      <td class="status-cell <%= _statusClass %>"><%= r.status %></td>
-                      <td><%= r.telefone %></td>
-                      <td><%= r.cpf_cnpj %></td>
-                      <td><%= r.criado_por %></td>
-                          <td class="datetime-cell" title="<%= r.dt_criacao %>"><%= r.dt_criacao %></td>
+                      <td class="cell-tooltip" title="<%= r.id %>"><%= r.id %></td>
+                      <td class="cell-tooltip" title="<%= r.filial %>"><%= r.filial %></td>
+                      <td class="cell-tooltip" title="<%= r.carga %>"><%= r.carga %></td>
+                      <td class="cell-tooltip datetime-cell" title="<%= r.dt_entrega %>" data-dt="<%= r.dt_entrega %>"><%= r.dt_entrega %></td>
+                      <td class="cell-tooltip" title="<%= r.placa %>"><%= r.placa %></td>
+                      <td class="cell-tooltip" title="<%= r.tipo_entrega %>"><%= r.tipo_entrega %></td>
+                      <td class="cell-tooltip" title="<%= r.motorista %>"><%= r.motorista %></td>
+                      <td class="cell-tooltip" title="<%= r.peso %>"><%= r.peso %></td>
+                      <td class="cell-tooltip status-cell <%= _statusClass %>" title="<%= r.status %>"><%= r.status %></td>
+                      <td class="cell-tooltip" title="<%= r.telefone %>"><%= r.telefone %></td>
+                      <td class="cell-tooltip" title="<%= r.cpf_cnpj %>"><%= r.cpf_cnpj %></td>
+                      <td class="cell-tooltip" title="<%= r.criado_por %>"><%= r.criado_por %></td>
+                          <td class="cell-tooltip datetime-cell" title="<%= r.dt_criacao %>" data-dt="<%= r.dt_criacao %>"><%= r.dt_criacao %></td>
                           <td class="actions-col text-center">
                             <button type="button" class="btn btn-danger btn-icon-sm btn-excluir-carga" data-id="<%= r.id %>" title="Excluir">
                               <i class="fas fa-trash"></i>
@@ -222,11 +220,6 @@
         function safe(v){ return v==null ? '' : String(v); }
 
         $(function(){
-          $('#openCadastroBtn').on('click', function(){
-            $('#cadastroForm')[0].reset();
-            $('#matchesList').empty();
-            $('#cadastroModal').modal('show');
-          });
 
           function renderMatches(matches){
             var $list = $('#matchesList');
@@ -476,6 +469,19 @@
           if (window.$ && $.fn && $.fn.DataTable) {
             var dataTable = $('#dataTable').DataTable({ autoWidth:false, dom: "<'top'<'d-flex justify-content-between'<'dt-length'l><'d-flex justify-content-end align-items-center'<'dt-search'f><'dt-buttons ms-2'B>>>>rtip", buttons:[{ extend:'excelHtml5', text:'<i class="fas fa-file-excel"></i> Excel', className:'btn btn-success btn-sm' }], lengthMenu:[[5,10,25,-1],[5,10,25,'Todos']], pageLength:10 });
             try{ dataTable.on('draw', function(){ formatDatetimeCells('.datetime-cell'); }); }catch(_){ }
+            try {
+              try { createColumnFilter('#dataTable','Carga'); } catch(_){}
+              try { createColumnFilter('#dataTable','Placa'); } catch(_){}
+              try { createColumnFilter('#dataTable','Motorista'); } catch(_){}
+              try { createColumnFilter('#dataTable','Status'); } catch(_){}
+              try{
+                var $cf = $('#dataTable').prev('.column-filters');
+                if ($cf && $cf.length) {
+                  $cf.css({ 'overflow-x': 'hidden', 'flex-wrap': 'nowrap', 'gap': '6px' });
+                  $cf.find('input').css({ 'min-width': '120px', 'width': 'auto', 'flex': '0 0 auto' });
+                }
+              }catch(_){ }
+            } catch(_){ }
           }
         } catch(e){console.error(e);} 
 
@@ -558,5 +564,25 @@
         createChart('chartPorDia','line',dayLabels,dayData,{label:'Por Dia', options:{ scales:{ y: { beginAtZero:true } } }});
       })();
     </script>
+      <script>
+        (function(){
+          try {
+            var params = new URLSearchParams(window.location.search || '');
+            if (params.get('openCadastro') === '1') {
+              if (window.$ && $.fn && $.fn.modal) {
+                $('#cadastroModal').modal('show');
+              } else {
+                var el = document.getElementById('cadastroModal');
+                if (el) try { new bootstrap.Modal(el).show(); } catch(e){}
+              }
+              if (history && history.replaceState) {
+                var url = new URL(window.location.href);
+                url.searchParams.delete('openCadastro');
+                history.replaceState(null, '', url.toString());
+              }
+            }
+          } catch(e){}
+        })();
+      </script>
   </body>
 </html>

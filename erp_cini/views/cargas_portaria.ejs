@@ -88,6 +88,8 @@
           </div>
         </div>
 
+        
+
         <div class="card mt-20">
           <div class="card-header">Cargas</div>
           <div class="card-body">
@@ -108,14 +110,14 @@
               <tbody>
                 <% if (cargas && cargas.length) { cargas.forEach(function(r){ %>
                   <tr>
-                    <td><%= r.FILIAL %></td>
-                    <td><%= r.CARGA %></td>
-                    <td class="datetime-cell" title="<%= r.DT_ENTREG %>"><%= r.DT_ENTREG %></td>
-                    <td class="status-cell status-pendente">Pendente</td>
-                    <td><%= r.PLACA %></td>
-                    <td><%= r.TIPO_ENTREGA %></td>
-                    <td><%= r.MOTORISTA %></td>
-                    <td><%= r.PESO %></td>
+                    <td class="cell-tooltip" title="<%= r.FILIAL %>"><%= r.FILIAL %></td>
+                    <td class="cell-tooltip" title="<%= r.CARGA %>"><%= r.CARGA %></td>
+                    <td class="cell-tooltip datetime-cell" title="<%= r.DT_ENTREG %>" data-dt="<%= r.DT_ENTREG %>"><%= r.DT_ENTREG %></td>
+                    <td class="cell-tooltip status-cell status-pendente" title="Pendente">Pendente</td>
+                    <td class="cell-tooltip" title="<%= r.PLACA %>"><%= r.PLACA %></td>
+                    <td class="cell-tooltip" title="<%= r.TIPO_ENTREGA %>"><%= r.TIPO_ENTREGA %></td>
+                    <td class="cell-tooltip" title="<%= r.MOTORISTA %>"><%= r.MOTORISTA %></td>
+                    <td class="cell-tooltip" title="<%= r.PESO %>"><%= r.PESO %></td>
                     <td>
                       <button type="button" class="btn btn-success btn-icon-sm concluirCargaBtn"
                               data-filial="<%= (r.FILIAL||'') %>" data-carga="<%= (r.CARGA||'') %>"
@@ -176,6 +178,108 @@
     </div>
   </div>
 
+    <div class="modal fade" id="cadastroModal" tabindex="-1" aria-labelledby="cadastroModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="cadastroModalLabel">Cadastrar Saída por Placa</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+          </div>
+          <div class="modal-body">
+            <form id="cadastroForm">
+              <div class="row">
+                <div class="col-md-4 mb-2">
+                  <label class="form-label">Placa</label>
+                  <div class="position-relative">
+                    <input id="cadastroPlaca" class="form-control" placeholder="Digite para buscar..." autocomplete="off" />
+                    <ul id="placaDropdown" class="dropdown-menu w-100" style="max-height:180px;overflow-y:auto;position:absolute;top:100%;left:0;right:0;z-index:1050;display:none;width:100%;"></ul>
+                    <input type="hidden" id="placaHidden" name="placa_selected">
+                  </div>
+                </div>
+                <div class="col-md-4 mb-2">
+                  <label class="form-label">Filial</label>
+                  <input id="cadastroFilial" class="form-control" />
+                </div>
+                <div class="col-md-4 mb-2">
+                  <label class="form-label">Carga</label>
+                  <input id="cadastroCarga" class="form-control" />
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-md-4 mb-2">
+                  <label class="form-label">Data Entrega</label>
+                  <input id="cadastroDtEntrega" type="datetime-local" class="form-control" />
+                </div>
+                <div class="col-md-4 mb-2">
+                  <label class="form-label">Tipo Entrega</label>
+                  <input id="cadastroTipoEntrega" class="form-control" />
+                </div>
+                <div class="col-md-4 mb-2">
+                  <label class="form-label">Motorista</label>
+                  <input id="cadastroMotorista" class="form-control" />
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-md-4 mb-2">
+                  <label class="form-label">Peso</label>
+                  <input id="cadastroPeso" class="form-control" />
+                </div>
+                <div class="col-md-8 mb-2">
+                  <label class="form-label">Registros encontrados</label>
+                  <div id="matchesList" class="list-group" style="max-height:200px; overflow:auto;"></div>
+                </div>
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="button" id="cadastroSaveBtn" class="btn btn-primary">Salvar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      window.cargasData = <%- JSON.stringify(typeof existing !== 'undefined' ? existing : []) %>;
+      function openCadastroModal(){
+        try { $('#cadastroForm')[0].reset(); $('#matchesList').empty(); $('#cadastroModal').modal('show'); } catch(e) { try { new bootstrap.Modal(document.getElementById('cadastroModal')).show(); } catch(_){ } }
+      }
+      (function(){
+        function safe(v){ return v==null ? '' : String(v); }
+        function renderMatches(matches){
+          var $list = $('#matchesList');
+          $list.empty();
+          if (!matches || !matches.length) { $list.append('<div class="text-muted p-2">Nenhum registro encontrado</div>'); return; }
+          matches.forEach(function(m, i){
+            var title = (safe(m.placa) || safe(m.PLACA)) + ' — ' + (safe(m.carga) || safe(m.CARGA)) + ' — ' + (safe(m.motorista) || safe(m.MOTORISTA));
+            var $it = $('<button type="button" class="list-group-item list-group-item-action match-item" data-idx="'+i+'"></button>');
+            $it.text(title);
+            $it.data('rec', m);
+            $list.append($it);
+          });
+        }
+        function findMatchesByPlaca(q){
+          if (!q) return [];
+          q = String(q).trim();
+          try {
+            return fetch('/cargas-portaria/find?placa=' + encodeURIComponent(q))
+              .then(function(r){ return r.json(); })
+              .then(function(resp){ return (resp && resp.success && Array.isArray(resp.results)) ? resp.results : (window.cargasData || []).filter(function(r){ try { return String((r.placa||r.PLACA||'')).toLowerCase().indexOf(q.toLowerCase()) !== -1; } catch(e){ return false; } }); })
+              .catch(function(){ return (window.cargasData || []).filter(function(r){ try { return String((r.placa||r.PLACA||'')).toLowerCase().indexOf(q.toLowerCase()) !== -1; } catch(e){ return false; } }); });
+          } catch(e){
+            return (window.cargasData || []).filter(function(r){ try { return String((r.placa||r.PLACA||'')).toLowerCase().indexOf(q.toLowerCase()) !== -1; } catch(e){ return false; } });
+          }
+        }
+        function populateFormWith(rec){ if (!rec) return; $('#cadastroFilial').val(rec.filial || rec.FILIAL || ''); $('#cadastroCarga').val(rec.carga || rec.CARGA || ''); var raw = rec.dt_entrega || rec.DT_ENTREG || rec.DT_ENTREG_RAW || rec.dt_entrega; if (raw) { try { var d = new Date(raw); if (!isNaN(d)) { var tzOffset = d.getTimezoneOffset() * 60000; var localISO = new Date(d - tzOffset).toISOString().slice(0,19); $('#cadastroDtEntrega').val(localISO); } else { $('#cadastroDtEntrega').val(''); } } catch(_) { $('#cadastroDtEntrega').val(''); } } else { $('#cadastroDtEntrega').val(''); } $('#cadastroPlaca').val(rec.placa || rec.PLACA || ''); $('#cadastroTipoEntrega').val(rec.tipo_entrega || rec.TIPO_ENTREGA || ''); $('#cadastroMotorista').val(rec.motorista || rec.MOTORISTA || ''); $('#cadastroPeso').val(rec.peso || rec.PESO || ''); }
+
+        $('#cadastroPlaca').on('input', function(){ var q = $(this).val(); var maybe = findMatchesByPlaca(q); if (maybe && typeof maybe.then === 'function') { maybe.then(function(matches){ renderMatches(matches); if (matches && matches.length) populateFormWith(matches[0]); }); } else { renderMatches(maybe); if (maybe && maybe.length) populateFormWith(maybe[0]); } });
+        $('#cadastroCarga').on('input', function(){ var q = $(this).val(); if (!q) return; try { fetch('/cargas-portaria/find?carga=' + encodeURIComponent(q)).then(function(r){ return r.json(); }).then(function(resp){ var matches = (resp && resp.success && Array.isArray(resp.results)) ? resp.results : []; renderMatches(matches); if (matches && matches.length) populateFormWith(matches[0]); }).catch(function(){ /* ignore */ }); } catch(e){} });
+        $(document).on('click', '.match-item', function(){ var rec = $(this).data('rec'); populateFormWith(rec); });
+
+        $('#cadastroSaveBtn').on('click', function(e){ e.preventDefault(); var payload = { filial: $('#cadastroFilial').val() || null, carga: $('#cadastroCarga').val() || null, dt_entrega: $('#cadastroDtEntrega').val() || null, placa: $('#cadastroPlaca').val() || null, tipo_entrega: $('#cadastroTipoEntrega').val() || null, motorista: $('#cadastroMotorista').val() || null, peso: $('#cadastroPeso').val() || null }; fetch('/cargas-portaria/concluir', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type':'application/json' }, body: JSON.stringify(payload) }).then(function(r){ return r.json(); }).then(function(json){ if (json && json.success) { try { $('#cadastroModal').modal('hide'); } catch(_){} location.reload(); } else { alert('Erro ao salvar: ' + (json && json.message ? json.message : 'erro desconhecido')); } }).catch(function(err){ console.error(err); alert('Erro ao salvar: ' + (err && err.message ? err.message : 'erro desconhecido')); }); });
+      })();
+    </script>
+
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       try {
@@ -209,10 +313,21 @@
             }
           });
           try { dataTable.on('draw', formatDatetimeCells); } catch(_){ }
+          try {
+            try { createColumnFilter('#cargasPortariaTable','Carga'); } catch(_){ }
+            try { createColumnFilter('#cargasPortariaTable','Placa'); } catch(_){ }
+            try { createColumnFilter('#cargasPortariaTable','Motorista'); } catch(_){ }
+            try { createColumnFilter('#cargasPortariaTable','Status'); } catch(_){ }
+            try{
+              var $cf = $('#cargasPortariaTable').prev('.column-filters');
+              if ($cf && $cf.length) {
+                $cf.css({ 'overflow-x': 'hidden', 'flex-wrap': 'nowrap', 'gap': '6px' });
+                $cf.find('input').css({ 'min-width': '120px', 'width': 'auto', 'flex': '0 0 auto' });
+              }
+            }catch(_){ }
+          } catch(_){ }
         }
       } catch(e) { console.error('DataTable init error:', e); }
-
-      // formatar colunas de data (lida com YYYY-MM-DD, YYYY-MM-DD HH:MM[:SS], ISO ou objetos Date)
       function formatDatetimeCells() {
         document.querySelectorAll('.datetime-cell').forEach(function(td){
           try {
@@ -243,10 +358,7 @@
         });
       }
 
-      // run initial formatting once
       try { formatDatetimeCells(); } catch(_){ }
-
-      // user initials
       const userName = document.getElementById('userName');
       if (userName) {
         const name = '<%= user && user.nome ? user.nome : "Usuário" %>';
@@ -287,17 +399,13 @@
             .then(function(resp){
                 if (resp && resp.success) {
                   if (bsModal) bsModal.hide();
-                  // remover a linha da tabela
                   try {
                     if (lastClickedBtn) {
                       var tr = lastClickedBtn.closest('tr');
                       if (tr) tr.remove();
                     }
                   } catch(_){ }
-
-                  // atualizar indicadores recalculando a partir da tabela atual
                   try {
-                    // concluidos incrementa
                     var conclEl = document.getElementById('concluidosCount');
                     var pendEl = document.getElementById('pendentesCount');
                     var totalEl = document.getElementById('totalCargasCount');
@@ -311,12 +419,9 @@
                     var conclu = parseInt(conclEl ? conclEl.textContent || '0' : '0', 10) || 0;
                     conclu = conclu + 1;
                     if (conclEl) conclEl.textContent = conclu;
-
-                    // recomputar pendentes, drivers, plates, peso, total
                     var tbody = document.querySelector('#cargasPortariaTable tbody');
                     var rows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
                     var pending = rows.length;
-                    // drivers and plates sets
                     var dSet = new Set(); var pSet = new Set(); var pesoSum = 0;
                     rows.forEach(function(r){
                       try {

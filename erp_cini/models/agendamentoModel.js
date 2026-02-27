@@ -119,7 +119,21 @@ async function insert(payload) {
         insertSql = `INSERT INTO [dw].[dbo].[AGENDAMENTO_PORTAL] (tipo, data_hora, assunto, nome, telefone, cpf_cnpj, responsavel, observacoes, status, criado_por, dt_criacao) VALUES (@tipo, @data_hora, @assunto, @nome, @telefone, @cpf_cnpj, @responsavel, @observacoes, @status, @criado_por, GETDATE())`;
       }
 
-      await req.query(insertSql);
+      const insertWithIdSql = insertSql + '; SELECT SCOPE_IDENTITY() AS id;';
+      const insertRes = await req.query(insertWithIdSql);
+      const newId = (insertRes && insertRes.recordset && insertRes.recordset[0] && insertRes.recordset[0].id) ? insertRes.recordset[0].id : null;
+      try {
+        if (newId) {
+          const reqV = pool.request();
+          reqV.input('nome', sql.VarChar(500), payload.nome || null);
+          reqV.input('agendamento_id', sql.Int, newId);
+          const qV = `IF OBJECT_ID('[dw].[dbo].[VISITANTES]','U') IS NOT NULL
+                        INSERT INTO [dw].[dbo].[VISITANTES] (nome, dt_inclusao, agendamento_id) VALUES (@nome, GETDATE(), @agendamento_id)`;
+          await reqV.query(qV);
+        }
+      } catch (e) {
+        console.error('Erro ao inserir visitante:', e && e.message ? e.message : e);
+      }
     } finally {
       try { await pool.close(); } catch(_){}
     }
@@ -168,6 +182,25 @@ async function updateStatus(id, status, marcadoPor, telefone, cpf_cnpj, dt_cheg)
 
       const q = `UPDATE [dw].[dbo].[AGENDAMENTO_PORTAL] SET ${setParts.join(', ')} WHERE id = @id`;
       await req.query(q);
+      try {
+        const visitorSet = [];
+        const reqV = pool.request();
+        reqV.input('id', sql.Int, parseInt(id, 10));
+        if (typeof telefone !== 'undefined' && telefone !== null) {
+          reqV.input('telefone', sql.VarChar(50), String(telefone) || null);
+          visitorSet.push('telefone = @telefone');
+        }
+        if (typeof cpf_cnpj !== 'undefined' && cpf_cnpj !== null) {
+          reqV.input('cpf_cnpj', sql.VarChar(50), String(cpf_cnpj) || null);
+          visitorSet.push('cpf_cnpj = @cpf_cnpj');
+        }
+        if (visitorSet.length) {
+          const qV = `IF OBJECT_ID('[dw].[dbo].[VISITANTES]','U') IS NOT NULL UPDATE [dw].[dbo].[VISITANTES] SET ${visitorSet.join(', ')} WHERE agendamento_id = @id`;
+          await reqV.query(qV);
+        }
+      } catch (e) {
+        console.error('Erro ao atualizar visitante:', e && e.message ? e.message : e);
+      }
     } finally {
       try { await pool.close(); } catch(_){ }
     }

@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <%- include('../System/headIncludes.ejs') %>
+  <title>Retiras | ERP CINI</title>
+</head>
+<body>
+  <div class="layout-container">
+    <%- include('../partials/sidebar') %>
+    <div class="main-content">
+      <div class="topbar">
+        <div class="topbar-left">
+          <div class="page-info">
+            <h1>Listagem de Retiras</h1>
+            <p>Lista de retiras do dia</p>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <%- include('../partials/userMenu') %>
+        </div>
+      </div>
+
+      <div class="content">
+        <% var retirasHoje = (typeof retirasHoje !== 'undefined' && retirasHoje) ? retirasHoje : []; %>
+        <div class="widgets-grid">
+
+          <div class="widget clickable-widget">
+            <div class="widget-content"><h3><%= typeof retirasHoje !== 'undefined' ? retirasHoje.length : 0 %></h3><p>Total Retiras Hoje</p></div>
+            <div class="widget-icon primary"><i class="bi bi-calendar-check"></i></div>
+          </div>
+
+          <div class="widget clickable-widget">
+            <div class="widget-content"><h3><%= (retirasHoje.filter(r => ((r.status||'').toString().toLowerCase().indexOf('conclu') !== -1)).length) %></h3><p>Concluídos</p></div>
+            <div class="widget-icon success"><i class="bi bi-check2-square"></i></div>
+          </div>
+
+          <div class="widget clickable-widget">
+            <div class="widget-content"><h3><%= (retirasHoje.filter(r => ((r.status||'').toString().toLowerCase().indexOf('pendente') !== -1 || (r.status||'').toString().toLowerCase().indexOf('falta') !== -1)).length) %></h3><p>Pendentes / Falta Saída</p></div>
+            <div class="widget-icon info"><i class="bi bi-list-check"></i></div>
+          </div>
+
+          <div class="widget clickable-widget">
+            <div class="widget-content"><h3><%= 0 %></h3><p>Indicador Extra</p></div>
+            <div class="widget-icon danger"><i class="bi bi-exclamation-triangle"></i></div>
+          </div>
+        </div>
+
+        <div class="card mt-20">
+          <div class="card-header">Retiras de Hoje</div>
+          <div class="card-body">
+            <table id="retirasHojeTable" class="table table-bordered custom-table" style="width:100%">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Pedido</th>
+                  <th>Data Agendada</th>
+                  <th>Nome Cliente</th>
+                  <th>Cod Cliente</th>
+                  <th>Categoria</th>
+                  <th>Observação</th>
+                  <th>Criado Por</th>
+                  <th>Status</th>
+                  <th>Data Entrada</th>
+                  <th>Data Saída</th>
+                  <th>Dt Criação</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% if (retirasHoje && retirasHoje.length) {
+                     retirasHoje.forEach(function(a){ %>
+                  <tr>
+                    <td class="cell-tooltip" title="<%= a.id %>"><%= a.id %></td>
+                    <td class="cell-tooltip" title="<%= a.pedido || '' %>"><%= a.pedido || '' %></td>
+                    <td class="cell-tooltip datetime-cell" title="<%= a.data || '' %>" data-dt="<%= a.data || '' %>"><% try { var d = new Date(a.data); if (!isNaN(d)) { %><%= d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %><% } else { %><%= a.data %><% } } catch(_) { %><%= a.data %><% } %></td>
+                    <td class="cell-tooltip" title="<%= a.nome_cli || a.cliente_nome || '' %>"><%= a.nome_cli || a.cliente_nome || '' %></td>
+                    <td class="cell-tooltip" title="<%= a.cod_cli || '' %>"><%= a.cod_cli || '' %></td>
+                    <td class="cell-tooltip" title="<%= a.categoria || '' %>"><%= a.categoria || '' %></td>
+                    <td class="cell-tooltip" title="<%= a.observacao || '' %>"><%= a.observacao || '' %></td>
+                    <td class="cell-tooltip" title="<%= a.criado_por || '' %>"><%= a.criado_por || '' %></td>
+                    <% var _st = (a.status || '').toString().toLowerCase(); %>
+                    <% var _cls = _st.indexOf('concl') !== -1 ? 'status-concluida' : (_st.indexOf('pend') !== -1 ? 'status-pendente' : (_st.indexOf('nao') !== -1 || _st.indexOf('não') !== -1 ? 'status-nao-concluida' : 'status-pendente')); %>
+                    <td class="cell-tooltip status-cell <%= _cls %>" title="<%= a.status || '' %>"><%= a.status || '' %></td>
+                    <% var _entradaCls = ''; try {
+                         var _sched = a.data ? new Date(String(a.data).replace(' ', 'T')) : null;
+                         var _ent = a.data_entrada ? new Date(String(a.data_entrada).replace(' ', 'T')) : null;
+                         if (_sched && !isNaN(_sched) && _ent && !isNaN(_ent)) {
+                           if (_ent > _sched) _entradaCls = 'entrada-late';
+                           else if (_ent < _sched) _entradaCls = 'entrada-early';
+                         }
+                       } catch(_) { _entradaCls = ''; }
+                    %>
+                    <td class="cell-tooltip <%= _entradaCls %>" data-dt="<%= (typeof a.data_entrada !== 'undefined' && a.data_entrada !== null) ? String(a.data_entrada) : '' %>" title="<%= (typeof a.data_entrada !== 'undefined' && a.data_entrada !== null) ? String(a.data_entrada) : '' %>">
+                      <% try {
+                           var dEntRaw = (typeof a.data_entrada !== 'undefined' && a.data_entrada !== null) ? String(a.data_entrada) : '';
+                           var dEnt = dEntRaw ? new Date(String(dEntRaw).replace(' ', 'T')) : null;
+                           if (dEnt && !isNaN(dEnt)) { %>
+                             <%= dEnt.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %>
+                           <% } else { %>
+                             <%= dEntRaw %>
+                           <% }
+                         } catch(_) { %>
+                           <%= a.data_entrada || '' %>
+                         <% } %>
+                    </td>
+                    <% var _saidaCls = ''; try {
+                         var _sched = a.data ? new Date(String(a.data).replace(' ', 'T')) : null;
+                         var _saida = a.data_saida ? new Date(String(a.data_saida).replace(' ', 'T')) : null;
+                         if (_sched && !isNaN(_sched) && _saida && !isNaN(_saida)) {
+                           var schedPlus1h = new Date(_sched.getTime() + 60*60*1000);
+                           if (_saida > schedPlus1h) _saidaCls = 'saida-late';
+                           else _saidaCls = 'saida-early';
+                         }
+                       } catch(_) { _saidaCls = ''; }
+                    %>
+                    <td class="cell-tooltip <%= _saidaCls %>" data-dt="<%= (typeof a.data_saida !== 'undefined' && a.data_saida !== null) ? String(a.data_saida) : '' %>" title="<%= (typeof a.data_saida !== 'undefined' && a.data_saida !== null) ? String(a.data_saida) : '' %>">
+                      <% try {
+                           var dSaidaRaw = (typeof a.data_saida !== 'undefined' && a.data_saida !== null) ? String(a.data_saida) : '';
+                           var dSaida = dSaidaRaw ? new Date(String(dSaidaRaw).replace(' ', 'T')) : null;
+                           if (dSaida && !isNaN(dSaida)) { %>
+                             <%= dSaida.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %>
+                           <% } else { %>
+                             <%= dSaidaRaw %>
+                           <% }
+                         } catch(_) { %>
+                           <%= a.data_saida || '' %>
+                         <% } %>
+                    </td>
+                    <td class="cell-tooltip datetime-cell" title="<%= a.dt_criacao || '' %>" data-dt="<%= a.dt_criacao || '' %>"><% try { var dc = new Date(a.dt_criacao); if (!isNaN(dc)) { %><%= dc.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %><% } else { %><%= a.dt_criacao || '' %><% } } catch(_) { %><%= a.dt_criacao || '' %><% } %></td>
+                    <td>
+                      <button type="button" class="btn btn-success btn-icon-sm editarRetira" data-id="<%= a.id %>" title="Atualizar">
+                        <i class="fas fa-check"></i>
+                      </button>
+                    </td>
+                  </tr>
+                <% }); } %>
+              </tbody>
+            </table>
+             <!-- extra filters are created dynamically by createColumnFilter -->
+          </div>
+        </div>
+
+        <div class="grid grid-2 mt-20">
+          <div class="card">
+            <div class="card-header">Progresso Geral das Retiras de Hoje</div>
+            <div class="card-body">
+              <div style="margin-bottom:16px;">
+                <% 
+                  var totalHoje = typeof retirasHoje !== 'undefined' ? retirasHoje.length : 0;
+                  var concluidosHoje = 0;
+                  if (typeof retirasHoje !== 'undefined' && retirasHoje.length) {
+                    concluidosHoje = retirasHoje.filter(function(a){ var st = (a.status || '').toString().toLowerCase(); return st.indexOf('conclu') !== -1; }).length;
+                    var naoConcluidosHoje = retirasHoje.filter(function(a){ var st = (a.status || '').toString().toLowerCase(); return st.indexOf('não') !== -1 || st.indexOf('nao') !== -1 || st.indexOf('nao conclu') !== -1; }).length;
+                    var pendentesHoje = totalHoje - concluidosHoje - naoConcluidosHoje;
+                  } else {
+                    var naoConcluidosHoje = 0;
+                    var pendentesHoje = totalHoje - concluidosHoje;
+                  }
+                  var progressoHoje = totalHoje > 0 ? Math.round((concluidosHoje / totalHoje) * 100) : 0;
+                %>
+                <div class="flex-between mb-10"><span style="font-size:13px;">Conclusão das Retiras do Dia</span><span style="font-size:13px;font-weight:600;"><%= progressoHoje %>%</span></div>
+                <div style="height:8px;background:var(--gray);border-radius:4px;overflow:hidden;">
+                  <div style="height:100%;background:var(--primary);width:<%= progressoHoje %>%;transition:all 0.3s ease;"></div>
+                </div>
+              </div>
+              <table style="width:100%;font-size:13px;margin-top:16px;">
+                <tr><td style="padding:8px 0;border-bottom:1px solid var(--gray);">Concluídos</td><td style="padding:8px 0;border-bottom:1px solid var(--gray);text-align:right;font-weight:600;"><%= concluidosHoje %></td></tr>
+                <tr><td style="padding:8px 0;border-bottom:1px solid var(--gray);">Pendentes</td><td style="padding:8px 0;border-bottom:1px solid var(--gray);text-align:right;font-weight:600;"><%= Math.max(0, pendentesHoje) %></td></tr>
+                <tr><td style="padding:8px 0;border-bottom:1px solid var(--gray);">Não Concluídos</td><td style="padding:8px 0;border-bottom:1px solid var(--gray);text-align:right;font-weight:600;"><%= naoConcluidosHoje %></td></tr>
+                <tr><td style="padding:8px 0;">Total do Dia</td><td style="padding:8px 0;text-align:right;font-weight:600;"><%= totalHoje %></td></tr>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+  <%- include('../System/bodyIncludes.ejs') %>
+
+  <style>
+    .entrada-late { background:#f8d7da !important; color:#721c24 !important; }
+    .entrada-early { background:#d4edda !important; color:#155724 !important; }
+    .saida-late { background:#f8d7da !important; color:#721c24 !important; }
+    .saida-early { background:#d4edda !important; color:#155724 !important; }
+    .dt-extra-filters { display:inline-block; margin-left:8px; vertical-align:middle; }
+    .dt-extra-filters .col-filter { display:inline-block; margin-right:6px; min-width:100px; max-width:180px; width:auto; vertical-align:middle; }
+  </style>
+
+  <div class="modal fade" id="modalRetira" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Atualizar Retira</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="modalRetiraId">
+          <div class="row g-2">
+            <div class="col-md-6">
+              <label class="form-label">Data Entrada</label>
+              <input type="datetime-local" id="modalDataEntrada" class="form-control">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Data Saída</label>
+              <input type="datetime-local" id="modalDataSaida" class="form-control">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" id="modalSaveRetira" class="btn btn-primary">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      const tableEl = document.getElementById('retirasHojeTable');
+      let dt = null;
+      function loadData(){
+        fetch('/retiras/data').then(r=>r.json()).then(resp=>{
+          if (!resp || !resp.success) return;
+          const rows = resp.data || [];
+          const tbody = tableEl.querySelector('tbody'); tbody.innerHTML = '';
+                rows.forEach(rw => {
+                  const fmt = (val) => {
+                    try {
+                      if (!val) return '';
+                      let dv = val;
+                      if (typeof val === 'string' && val.indexOf('T') === -1 && val.indexOf(' ') !== -1) dv = val.replace(' ', 'T');
+                      const d = new Date(dv);
+                      if (!isNaN(d)) return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    } catch(_) {}
+                    return val || '';
+                  };
+                  const statusBadge = (status) => {
+                    const s = String(status || '').toLowerCase();
+                    let cls = 'status-pendente';
+                    if (s.indexOf('concl') !== -1) cls = 'status-concluida';
+                    else if (s.indexOf('pend') !== -1) cls = 'status-pendente';
+                    else if (s.indexOf('nao') !== -1 || s.indexOf('não') !== -1) cls = 'status-nao-concluida';
+                    return `<td class="status-cell ${cls}">${status || ''}</td>`;
+                  };
+                  function getEntradaClass(scheduled, entrada) {
+                    try {
+                      if (!scheduled || !entrada) return '';
+                      const s = (typeof scheduled === 'string' && scheduled.indexOf(' ') !== -1) ? new Date(scheduled.replace(' ', 'T')) : new Date(scheduled);
+                      const e = (typeof entrada === 'string' && entrada.indexOf(' ') !== -1) ? new Date(entrada.replace(' ', 'T')) : new Date(entrada);
+                      if (isNaN(s) || isNaN(e)) return '';
+                      if (e > s) return 'entrada-late';
+                      if (e < s) return 'entrada-early';
+                    } catch(_) { }
+                    return '';
+                  }
+                  function getSaidaClass(scheduled, saida) {
+                    try {
+                      if (!scheduled || !saida) return '';
+                      const s = (typeof scheduled === 'string' && scheduled.indexOf(' ') !== -1) ? new Date(scheduled.replace(' ', 'T')) : new Date(scheduled);
+                      const e = (typeof saida === 'string' && saida.indexOf(' ') !== -1) ? new Date(saida.replace(' ', 'T')) : new Date(saida);
+                      if (isNaN(s) || isNaN(e)) return '';
+                      const sPlus1h = new Date(s.getTime() + 60*60*1000);
+                      if (e > sPlus1h) return 'saida-late';
+                      else return 'saida-early';
+                    } catch(_) { }
+                    return '';
+                  }
+                  const tr = document.createElement('tr');
+                  tr.innerHTML = `
+                    <td class="cell-tooltip" title="${rw.id || ''}">${rw.id || ''}</td>
+                    <td class="cell-tooltip" title="${(rw.pedido||'')}">${rw.pedido || ''}</td>
+                    <td class="cell-tooltip datetime-cell" title="${(rw.data||'')}" data-dt="${(rw.data||'')}">${fmt(rw.data)}</td>
+                    <td class="cell-tooltip" title="${(rw.nome_cli||rw.cliente_nome||'')}">${rw.nome_cli || rw.cliente_nome || ''}</td>
+                    <td class="cell-tooltip" title="${(rw.cod_cli||'')}">${rw.cod_cli || ''}</td>
+                    <td class="cell-tooltip" title="${(rw.categoria||'')}">${rw.categoria || ''}</td>
+                    <td class="cell-tooltip" title="${(rw.observacao||'')}">${rw.observacao || ''}</td>
+                    <td class="cell-tooltip" title="${(rw.criado_por||'')}">${rw.criado_por || ''}</td>
+                    ${(() => { const s = (rw.status||'') ; const cls = (s && s.toString().toLowerCase().indexOf('concl')!==-1) ? 'status-concluida' : ((s && s.toString().toLowerCase().indexOf('pend')!==-1) ? 'status-pendente' : ((s && (s.toString().toLowerCase().indexOf('nao')!==-1 || s.toString().toLowerCase().indexOf('não')!==-1)) ? 'status-nao-concluida' : 'status-pendente')); return '<td class="cell-tooltip status-cell ' + cls + '" title="'+ (s||'') +'">' + (s || '') + '</td>'; })()}
+                    ${(() => { const cls = getEntradaClass(rw.data, rw.data_entrada); return '<td class="cell-tooltip ' + cls + '" title="'+ (rw.data_entrada || '') +'" data-dt="' + (rw.data_entrada || '') + '">' + (fmt(rw.data_entrada) || '') + '</td>'; })()}
+                    ${(() => { const cls = getSaidaClass(rw.data, rw.data_saida); return '<td class="cell-tooltip ' + cls + '" title="'+ (rw.data_saida || '') +'" data-dt="' + (rw.data_saida || '') + '">' + (fmt(rw.data_saida) || '') + '</td>'; })()}
+                    <td class="cell-tooltip datetime-cell" title="${(rw.dt_criacao||'')}" data-dt="${(rw.dt_criacao||'')}">${fmt(rw.dt_criacao)}</td>
+                    <td class="cell-tooltip"><button type="button" class="btn btn-success btn-icon-sm editarRetira" data-id="${rw.id}" title="Atualizar"><i class="fas fa-check"></i></button></td>
+                  `;
+                  tbody.appendChild(tr);
+          });
+          function formatDatetimeCells(selector){
+            selector = selector || '.datetime-cell';
+            document.querySelectorAll(selector).forEach(function(td){
+              try{
+                var raw = td.getAttribute('data-dt') || td.getAttribute('title') || td.getAttribute('data-raw') || td.textContent || '';
+                var formatted = raw;
+                if (typeof raw === 'string'){
+                  var m = raw.match(/(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
+                  if (m) formatted = m[3] + '/' + m[2] + '/' + m[1] + ' ' + m[4] + ':' + m[5];
+                  else { var d = new Date(raw); if (!isNaN(d)) formatted = d.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }); }
+                }
+                td.textContent = formatted;
+                td.setAttribute('title', formatted);
+              }catch(_){ }
+            });
+          }
+
+          try{ if (window.$ && $.fn && $.fn.DataTable) {
+            if (dt) dt.destroy();
+            dt = $('#retirasHojeTable').DataTable({
+              autoWidth: false,
+              dom: "<'top'<'d-flex justify-content-between'<'dt-length'l><'d-flex justify-content-end align-items-center'<'dt-search'f><'dt-buttons ms-2'B>>>>rtip",
+              buttons: [
+                {
+                  extend: 'excelHtml5',
+                  text: '<i class="fas fa-file-excel"></i> Excel',
+                  titleAttr: 'Exportar para Excel',
+                  className: 'btn btn-success btn-sm'
+                }
+              ],
+              lengthMenu: [[5, 10, 25, -1], [5, 10, 25, 'Todos']],
+              pageLength: 10,
+              language: {
+                decimal: ",",
+                thousands: ".",
+                emptyTable: "Nenhum registro encontrado",
+                info: "Mostrando _START_ a _END_ de _TOTAL_ registros",
+                infoEmpty: "Mostrando 0 a 0 de 0 registros",
+                infoFiltered: "(filtrado de _MAX_ registros)",
+                lengthMenu: "Mostrar _MENU_ registros",
+                loadingRecords: "Carregando...",
+                processing: "Processando...",
+                search: "Pesquisar:",
+                zeroRecords: "Nenhum registro encontrado",
+                paginate: { first: "Primeiro", last: "Último", next: "Próximo", previous: "Anterior" }
+              }
+            });
+            try{ if (dt && dt.on) dt.on('draw', function(){ formatDatetimeCells('.datetime-cell'); }); }catch(_){ }
+            function createSearchableDropdown(inputId, selectId, columnIndex, tableSelector) {
+              try{
+                var $input = $('#' + inputId);
+                var $select = $('#' + selectId);
+                console.log('createSearchableDropdown init:', inputId, 'inputFound=', $input.length, 'selectFound=', $select.length, 'col=', columnIndex, 'tableSel=', tableSelector);
+                if ($input.length === 0) return;
+                $('.dropdown-menu.searchable-column[data-for="' + inputId + '"]').remove();
+                var $appendTarget = null;
+                var $columnFilters = $input.closest('.column-filters');
+                if ($columnFilters && $columnFilters.length) {
+                  $appendTarget = $columnFilters;
+                  try{ $appendTarget.css('position','relative'); }catch(e){}
+                } else {
+                  $appendTarget = $('body');
+                }
+                var $dropdown = $('<div class="dropdown-menu searchable-column" data-for="' + inputId + '" style="position:absolute; z-index:3000; display:none; background:white; border:1px solid #ccc; max-height:240px; overflow-y:auto; box-sizing:border-box;"></div>');
+                $appendTarget.append($dropdown);
+                if ($select && $select.length) {
+                  $select.find('option').each(function(){ if ($(this).val() !== '') { var $item = $('<div class="dropdown-item"></div>'); $item.text($(this).text()); $item.data('value', $(this).val()); $dropdown.append($item); } });
+                }
+                if ($dropdown.children().length === 0 && typeof columnIndex === 'number' && tableSelector) {
+                  try{
+                    var tbl = $(tableSelector).DataTable();
+                    var vals = tbl.column(columnIndex).data().toArray().map(function(v){ try { return $('<div>').html(v).text().toString().trim(); } catch(e){ return (v||'').toString().trim(); } }).filter(function(v){ return v !== ''; });
+                    var uniq = Array.from(new Set(vals)).sort();
+                    uniq.forEach(function(u){ var $it = $('<div class="dropdown-item"></div>'); $it.text(u); $it.data('value', u); $dropdown.append($it); });
+                  }catch(e){}
+                }
+                function positionDropdown(){
+                  try{
+                    var w = Math.max($input.outerWidth(), 120);
+                    if ($appendTarget && $appendTarget.is('body')){
+                      var rect = $input[0].getBoundingClientRect();
+                      var left = rect.left + window.pageXOffset;
+                      var top = rect.bottom + window.pageYOffset + 4;
+                      $dropdown.css({ left: left + 'px', top: top + 'px', width: w + 'px' });
+                    } else {
+                      var inpOff = $input.offset();
+                      var targetOff = $appendTarget.offset() || { left: 0, top: 0 };
+                      var left = inpOff.left - targetOff.left;
+                      var top = (inpOff.top - targetOff.top) + $input.outerHeight() + 4;
+                      $dropdown.css({ left: left + 'px', top: top + 'px', width: w + 'px' });
+                    }
+                  }catch(e){}
+                }
+                $input.on('focus.createSearch', function(){ positionDropdown(); console.log('createSearchableDropdown show:', inputId); $dropdown.show(); });
+                $input.on('click.createSearch', function(){ positionDropdown(); $dropdown.show(); });
+                $input.on('blur.createSearch', function(){ setTimeout(function(){ console.log('createSearchableDropdown hide:', inputId); $dropdown.hide(); }, 200); });
+                $input.on('input.createSearch', function(){ var term = ($input.val()||'').toLowerCase(); $dropdown.find('.dropdown-item').each(function(){ var t = $(this).text().toLowerCase(); $(this).toggle(t.indexOf(term) !== -1); }); positionDropdown(); $dropdown.show(); });
+                $dropdown.on('click.createSearch touchstart.createSearch', '.dropdown-item', function(e){
+                  var v = $(this).data('value');
+                  var text = $(this).text() || '';
+                  $input.val(text);
+                  $dropdown.hide();
+                  try{ if (tableSelector && typeof columnIndex === 'number') { var tbl = $(tableSelector).DataTable(); if (tbl) tbl.column(columnIndex).search(v || '').draw(); } }catch(e){}
+                });
+                $input.on('keypress.createSearch', function(e){ if (e.which === 13) { var searchTerm = $input.val(); try{ if (tableSelector && typeof columnIndex === 'number') { var tbl = $(tableSelector).DataTable(); if (tbl) tbl.column(columnIndex).search(searchTerm).draw(); } }catch(e){} $dropdown.hide(); } });
+                var repositionHandler = function(){ if ($dropdown.is(':visible')) positionDropdown(); };
+                $(window).on('scroll.createSearch resize.createSearch', repositionHandler);
+                var mo = new MutationObserver(function(){ if (!$.contains(document, $input[0])) { $dropdown.remove(); $(window).off('scroll.createSearch resize.createSearch', repositionHandler); mo.disconnect(); } });
+                mo.observe(document.body, { childList: true, subtree: true });
+              }catch(e){}
+            }
+            try{ formatDatetimeCells('.datetime-cell'); }catch(_){ }
+              try {
+                createColumnFilter('#retirasHojeTable','Pedido');
+                createColumnFilter('#retirasHojeTable','Nome Cliente');
+                createColumnFilter('#retirasHojeTable','Status');
+                try{
+                  var $cf = $('#retirasHojeTable').prev('.column-filters');
+                  if ($cf && $cf.length) {
+                    $cf.css({ 'overflow-x': 'hidden', 'flex-wrap': 'nowrap', 'gap': '6px' });
+                    $cf.find('input').css({ 'min-width': '120px', 'width': 'auto', 'flex': '0 0 auto' });
+                  }
+                }catch(_){ }
+              } catch(_){ }
+              
+          }}catch(_){ }
+        }).catch(err=>console.error(err));
+      }
+      loadData();
+
+      const modalEl = document.getElementById('modalRetira');
+      const bsModal = modalEl ? new bootstrap.Modal(modalEl) : null;
+      tableEl.addEventListener('click', function(e){
+        const btn = e.target.closest('.editarRetira'); if (!btn) return;
+        const id = btn.getAttribute('data-id'); if (!id) return;
+        document.getElementById('modalRetiraId').value = id;
+        const row = btn.closest('tr');
+        let rawEntrada = null; let rawSaida = null;
+        try {
+          if (row) {
+            const tdEntrada = row.querySelector('td[data-raw]');
+            const allWithRaw = row.querySelectorAll('td[data-raw]');
+            if (allWithRaw && allWithRaw.length) {
+              rawEntrada = allWithRaw[0] ? allWithRaw[0].getAttribute('data-raw') : null;
+              rawSaida = allWithRaw[1] ? allWithRaw[1].getAttribute('data-raw') : null;
+            }
+          }
+        } catch(_){}
+        function toLocalInput(val){
+          try {
+            if (!val) return '';
+            let d = null;
+            if (typeof val === 'string' && val.indexOf('T') !== -1) d = new Date(val);
+            else d = new Date(String(val).replace(' ', 'T'));
+            if (isNaN(d)) return '';
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth()+1).padStart(2,'0');
+            const dd = String(d.getDate()).padStart(2,'0');
+            const hh = String(d.getHours()).padStart(2,'0');
+            const mi = String(d.getMinutes()).padStart(2,'0');
+            return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+          } catch(_) { return ''; }
+        }
+        document.getElementById('modalDataEntrada').value = toLocalInput(rawEntrada);
+        document.getElementById('modalDataSaida').value = toLocalInput(rawSaida);
+        if (bsModal) bsModal.show();
+      });
+
+      document.getElementById('modalSaveRetira').addEventListener('click', function(){
+        const id = document.getElementById('modalRetiraId').value;
+        let dtEntrada = document.getElementById('modalDataEntrada').value || null;
+        let dtSaida = document.getElementById('modalDataSaida').value || null;
+        fetch('/retiras/' + encodeURIComponent(id) + '/update', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ data_entrada: dtEntrada, data_saida: dtSaida }) })
+          .then(r=>r.json()).then(resp=>{
+            if (resp && resp.success) {
+              if (bsModal) bsModal.hide();
+              window.location.reload();
+            } else alert('Erro ao atualizar');
+          }).catch(err=>{ console.error(err); alert('Erro ao atualizar'); });
+      });
+    });
+  </script>
+
+  
+</body>
+</html>

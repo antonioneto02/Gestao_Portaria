@@ -67,25 +67,6 @@
             <div class="widget-content">
               <h3><%= (agendamentosAtrasados && agendamentosAtrasados.length) ? agendamentosAtrasados.length : 0 %></h3>
               <p>Atrasadas</p>
-              <% if (agendamentosAtrasados && agendamentosAtrasados.length) { %>
-                <div style="max-height:140px;overflow:auto;margin-top:8px;padding-right:6px;">
-                  <ul class="list-unstyled small mb-0">
-                    <% agendamentosAtrasados.forEach(function(it){
-                         let raw = it.data_hora || it.dataHora || it.DataHora || '';
-                         let display = raw;
-                         try {
-                           if (typeof raw === 'string'){
-                             const m = raw.match(/(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
-                             if (m) display = m[3] + '/' + m[2] + '/' + m[1] + ' ' + m[4] + ':' + m[5];
-                             else { const d = new Date(raw); if (!isNaN(d)) display = d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
-                           }
-                         } catch(_){ }
-                    %>
-                      <li><strong><%= display %></strong> — <%= it.assunto || it.nome || '-' %></li>
-                    <% }) %>
-                  </ul>
-                </div>
-              <% } %>
             </div>
             <div class="widget-icon danger"><i class="bi bi-exclamation-triangle"></i></div>
           </div>
@@ -301,6 +282,18 @@
             }
           });
           try{ if (todayTable && todayTable.on) todayTable.on('draw', function(){ formatDatetimeCells('.datetime-cell-hoje'); }); } catch(_){ }
+          try {
+            try { createColumnFilter('#agendamentosHojeTable','Tipo'); } catch(_){}
+            try { createColumnFilter('#agendamentosHojeTable','Nome'); } catch(_){}
+            try { createColumnFilter('#agendamentosHojeTable','Status'); } catch(_){}
+            try{
+              var $cf = $('#agendamentosHojeTable').prev('.column-filters');
+              if ($cf && $cf.length) {
+                $cf.css({ 'overflow-x': 'hidden', 'flex-wrap': 'nowrap', 'gap': '6px' });
+                $cf.find('input').css({ 'min-width': '120px', 'width': 'auto', 'flex': '0 0 auto' });
+              }
+            }catch(_){ }
+          } catch(_){ }
         }
       } catch(e) { console.error('DataTable init error:', e); }
       try { formatDatetimeCells('.datetime-cell-hoje'); } catch(_){ }

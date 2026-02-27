@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const session = require('express-session');
 const cookieParser = require('cookie-parser');
@@ -11,6 +12,17 @@ const dbProtheus = require('./config/dbConfigProtheus');
 const dbDw = require('./config/dbConfigDw');
 const app = express();
 const PORT = process.env.PORT;
+const multer = require('multer');
+const uploadDir = path.join(__dirname, 'uploads');
+try { if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true }); } catch(e) {}
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) { cb(null, uploadDir); },
+  filename: function (req, file, cb) {
+    const safe = Date.now() + '_' + file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    cb(null, safe);
+  }
+});
+const upload = multer({ storage });
 
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
@@ -217,6 +229,109 @@ app.get('/dashboard', ensureAuth, async (req, res) => {
   }
 });
 
+app.get('/retiras', ensureAuth, async (req, res) => {
+  try {
+    let retirasHoje = [];
+    try {
+      retirasHoje = await horariosRetiraModel.getAllReservations();
+      if (Array.isArray(retirasHoje)) {
+        retirasHoje = retirasHoje.filter(r => { try { return !((r.status||'').toString().toLowerCase().indexOf('concl') !== -1); } catch(e) { return true; } });
+      }
+    } catch(_) { retirasHoje = []; }
+    return res.render('Retiras/retiras', { retirasHoje, user: { nome: req.session.user_name || req.session.username || req.cookies && req.cookies.username || 'Usuário', email: req.session.user_email || req.cookies && req.cookies.user_email || '', id: req.session.user_id || req.session.userID || null } });
+  } catch (e) {
+    console.error('Erro ao renderizar retiras:', e && e.message ? e.message : e);
+    return res.render('Retiras/retiras', { retirasHoje: [], user: { nome: req.session.user_name || req.session.username || 'Usuário', email: '', id: null } });
+  }
+});
+
+app.get('/retiras/data', ensureAuth, async (req, res) => {
+  try {
+    let reservations = await horariosRetiraModel.getAllReservations();
+    try {
+      if (Array.isArray(reservations)) {
+        reservations = reservations.filter(r => { try { return !((r.status||'').toString().toLowerCase().indexOf('concl') !== -1); } catch(e) { return true; } });
+      }
+    } catch(e) {}
+    return res.json({ success: true, data: reservations });
+  } catch (e) {
+    console.error('Erro retiras data:', e && e.message ? e.message : e);
+    return res.status(500).json({ success: false, message: 'Erro ao buscar dados' });
+  }
+});
+
+app.get('/conferencia', ensureAuth, async (req, res) => {
+  try {
+    let people = [];
+    try { people = await conferenciaModel.getTopPeople(1000); } catch(_) { people = []; }
+    return res.render('conferencia_list', { people, user: { nome: req.session.user_name || req.session.username || req.cookies && req.cookies.username || 'Usuário', email: req.session.user_email || req.cookies && req.cookies.user_email || '', id: req.session.user_id || req.session.userID || null } });
+  } catch (e) {
+    console.error('Erro ao renderizar conferencia:', e && e.message ? e.message : e);
+    return res.render('conferencia_list', { people: [], user: { nome: req.session.user_name || req.session.username || 'Usuário', email: '', id: null } });
+  }
+});
+
+app.get('/conferencia/search', ensureAuth, async (req, res) => {
+  try {
+    const q = (req.query.q || req.query.name || '').trim();
+    if (!q) return res.json({ success: true, data: [] });
+    const people = await conferenciaModel.searchPeopleByName(q, 5000);
+    return res.json({ success: true, data: people });
+  } catch (e) {
+    console.error('Erro conferencia search:', e && e.message ? e.message : e);
+    return res.status(500).json({ success: false, message: 'Erro ao buscar dados' });
+  }
+});
+
+app.get('/conferencia/data', ensureAuth, async (req, res) => {
+  try {
+    const people = await conferenciaModel.getTopPeople(1000);
+    return res.json({ success: true, data: people });
+  } catch (e) {
+    console.error('Erro conferencia data:', e && e.message ? e.message : e);
+    return res.status(500).json({ success: false, message: 'Erro ao buscar dados' });
+  }
+});
+
+app.post('/retiras/:id/update', ensureAuth, express.json(), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ success: false, message: 'id inválido' });
+    const body = req.body || {};
+    function parseLocalDateString(s) {
+      if (!s) return null;
+      try {
+        const str = String(s).trim();
+        const m = str.match(/(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/);
+        if (m) {
+          const y = parseInt(m[1], 10);
+          const mo = parseInt(m[2], 10) - 1;
+          const d = parseInt(m[3], 10);
+          const hh = parseInt(m[4], 10);
+          const mm = parseInt(m[5], 10);
+          const ss = m[6] ? parseInt(m[6], 10) : 0;
+          return new Date(y, mo, d, hh, mm, ss);
+        }
+        const dt = new Date(str);
+        if (!isNaN(dt)) return dt;
+      } catch (e) {}
+      return null;
+    }
+    const dtEntrada = parseLocalDateString(body.data_entrada);
+    const dtSaida = parseLocalDateString(body.data_saida);
+    try {
+      const updated = await horariosRetiraModel.updateReservationDates(id, { data_entrada: dtEntrada, data_saida: dtSaida });
+      return res.json({ success: true, reservation: updated });
+    } catch (err) {
+      console.error('Erro atualizar retira:', err && err.message ? err.message : err);
+      return res.status(500).json({ success: false, message: 'Erro ao atualizar reserva' });
+    }
+  } catch (e) {
+    console.error('Erro post retiras update:', e && e.message ? e.message : e);
+    return res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
 app.post('/agendamentos/:id/concluir', ensureAuth, express.json(), async (req, res) => {
   const id = req.params.id;
   if (!id) return res.status(400).json({ success: false, message: 'ID ausente' });
@@ -349,7 +464,7 @@ app.get('/agendamentos', ensureAuth, async (req, res) => {
   }
 
   try {
-    agendamentos = await agendamentoModel.getAll();
+    agendamentos = await agendamentoModel.getToday();
   } catch (err) {
     console.error('Erro ao buscar agendamentos via model:', err && err.message ? err.message : err);
   }
@@ -374,8 +489,9 @@ app.get('/listagem/cargas-portaria', ensureAuth, async (req, res) => {
     try {
       if (!startParam && !endParam) {
         const qAll = `SELECT id, filial, carga, dt_entrega, placa, tipo_entrega, motorista, peso, status, telefone, cpf_cnpj, criado_por, dt_criacao
-                      FROM [dw].[dbo].[CARGAS_PORTARIA]
-                      ORDER BY dt_criacao DESC`;
+                FROM [dw].[dbo].[CARGAS_PORTARIA]
+                WHERE filial = '0101-Cini SJP' AND (tipo_entrega = '02-Rota' OR tipo_entrega = '01-AS')
+                ORDER BY dt_criacao DESC`;
         const rAll = await pool.request().query(qAll);
         const cargasAll = (rAll && rAll.recordset) ? rAll.recordset : [];
         return res.render('cargas_portaria_list', { cargas: cargasAll, startDate: null, endDate: null, user: { nome: req.session.user_name || req.session.username || req.cookies && req.cookies.username || 'Usuário', email: req.session.user_email || req.cookies && req.cookies.user_email || '', id: req.session.user_id || req.session.userID || null } });
@@ -397,8 +513,9 @@ app.get('/listagem/cargas-portaria', ensureAuth, async (req, res) => {
       if (!startDate && endDate) startDate = endDate;
       if (!startDate || !endDate) {
         const qAll = `SELECT id, filial, carga, dt_entrega, placa, tipo_entrega, motorista, peso, status, telefone, cpf_cnpj, criado_por, dt_criacao
-                      FROM [dw].[dbo].[CARGAS_PORTARIA]
-                      ORDER BY dt_criacao DESC`;
+                FROM [dw].[dbo].[CARGAS_PORTARIA]
+                WHERE filial = '0101-Cini SJP' AND (tipo_entrega = '02-Rota' OR tipo_entrega = '01-AS')
+                ORDER BY dt_criacao DESC`;
         const rAll = await pool.request().query(qAll);
         const cargasAll = (rAll && rAll.recordset) ? rAll.recordset : [];
         return res.render('cargas_portaria_list', { cargas: cargasAll, startDate: null, endDate: null, user: { nome: req.session.user_name || req.session.username || req.cookies && req.cookies.username || 'Usuário', email: req.session.user_email || req.cookies && req.cookies.user_email || '', id: req.session.user_id || req.session.userID || null } });
@@ -407,6 +524,7 @@ app.get('/listagem/cargas-portaria', ensureAuth, async (req, res) => {
       const q = `SELECT id, filial, carga, dt_entrega, placa, tipo_entrega, motorista, peso, status, telefone, cpf_cnpj, criado_por, dt_criacao
                  FROM [dw].[dbo].[CARGAS_PORTARIA]
                  WHERE CONVERT(date, dt_criacao) BETWEEN @start AND @end
+                   AND filial = '0101-Cini SJP' AND (tipo_entrega = '02-Rota' OR tipo_entrega = '01-AS')
                  ORDER BY dt_criacao DESC`;
       const reqDb = pool.request();
       reqDb.input('start', sql.Date, new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()));
@@ -423,7 +541,6 @@ app.get('/listagem/cargas-portaria', ensureAuth, async (req, res) => {
   }
 });
 
-// Backwards-compatible route: support /cadastro/cargas-portaria (redirect to existing listagem)
 app.get('/cadastro/cargas-portaria', ensureAuth, (req, res) => {
   return res.redirect('/listagem/cargas-portaria');
 });
@@ -435,25 +552,33 @@ app.get('/cargas-portaria', ensureAuth, async (req, res) => {
       const q = `SELECT FILIAL, CARGA, DT_ENTREG, PLACA, TIPO_ENTREGA, MOTORISTA, PESO
                  FROM [dw].[dbo].[V_CARGAS]
                  WHERE CONVERT(date, DT_ENTREG) = CONVERT(date, GETDATE())
+                   AND FILIAL = '0101-Cini SJP' AND (TIPO_ENTREGA = '02-Rota' OR TIPO_ENTREGA = '01-AS')
                  ORDER BY DT_ENTREG DESC`;
       const r = await pool.request().query(q);
       const cargas = (r && r.recordset) ? r.recordset : [];
-      const q2 = `SELECT filial, carga, placa, CONVERT(date, dt_entrega) AS dt_entrega_date FROM [dw].[dbo].[CARGAS_PORTARIA] WHERE CONVERT(date, dt_entrega) = CONVERT(date, GETDATE())`;
+      const q2 = `SELECT filial, carga, placa, CONVERT(date, dt_entrega) AS dt_entrega_date FROM [dw].[dbo].[CARGAS_PORTARIA]
+                  WHERE CONVERT(date, dt_entrega) = CONVERT(date, GETDATE())
+                    AND filial = '0101-Cini SJP' AND (tipo_entrega = '02-Rota' OR tipo_entrega = '01-AS')`;
       const r2 = await pool.request().query(q2);
       const existing = (r2 && r2.recordset) ? r2.recordset : [];
       const existingSet = new Set();
+      function normalizeKeyPart(v) {
+        try {
+          return String(v || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/\s+/g,' ').trim().toLowerCase();
+        } catch (e) { return String(v || '').trim().toLowerCase(); }
+      }
       existing.forEach(function(it){
         try {
-          const key = (String(it.filial||'') + '||' + String(it.carga||'') + '||' + String(it.placa||'')).toLowerCase();
+          const key = normalizeKeyPart(it.filial) + '||' + normalizeKeyPart(it.carga) + '||' + normalizeKeyPart(it.placa);
           existingSet.add(key);
-        } catch(_){}
+        } catch(_){ }
       });
 
       let concluidosCount = 0;
       const pending = [];
       cargas.forEach(function(c){
         try {
-          const key = (String(c.FILIAL||'') + '||' + String(c.CARGA||'') + '||' + String(c.PLACA||'')).toLowerCase();
+          const key = normalizeKeyPart(c.FILIAL || c.filial) + '||' + normalizeKeyPart(c.CARGA || c.carga) + '||' + normalizeKeyPart(c.PLACA || c.placa);
           if (existingSet.has(key)) {
             concluidosCount++;
           } else {
@@ -470,7 +595,7 @@ app.get('/cargas-portaria', ensureAuth, async (req, res) => {
         } catch (e) { return raw; }
       }
       pending.forEach(function(it){ try { if (it.DT_ENTREG) { it.DT_ENTREG_RAW = it.DT_ENTREG; it.DT_ENTREG = formatDtEntregaForDisplay(it.DT_ENTREG); } } catch(_){} });
-      return res.render('cargas_portaria', { cargas: pending, concluidos: concluidosCount, user: { nome: req.session.user_name || req.session.username || req.cookies && req.cookies.username || 'Usuário', email: req.session.user_email || req.cookies && req.cookies.user_email || '', id: req.session.user_id || req.session.userID || null } });
+      return res.render('cargas_portaria', { cargas: pending, concluidos: concluidosCount, existing: existing, user: { nome: req.session.user_name || req.session.username || req.cookies && req.cookies.username || 'Usuário', email: req.session.user_email || req.cookies && req.cookies.user_email || '', id: req.session.user_id || req.session.userID || null } });
     } finally {
       try { await pool.close(); } catch(_){ }
     }
@@ -478,6 +603,78 @@ app.get('/cargas-portaria', ensureAuth, async (req, res) => {
     console.error('Erro ao buscar cargas para portaria:', err && err.message ? err.message : err);
     return res.render('cargas_portaria', { cargas: [], user: { nome: req.session.user_name || req.session.username || req.cookies && req.cookies.username || 'Usuário', email: req.session.user_email || req.cookies && req.cookies.user_email || '', id: req.session.user_id || req.session.userID || null } });
   }
+});
+
+app.get('/cargas-portaria/find', ensureAuth, async (req, res) => {
+  try {
+    const placaQ = typeof req.query.placa === 'string' && req.query.placa.trim() ? req.query.placa.trim() : null;
+    const cargaQ = typeof req.query.carga === 'string' && req.query.carga.trim() ? req.query.carga.trim() : null;
+    const filialQ = typeof req.query.filial === 'string' && req.query.filial.trim() ? req.query.filial.trim() : null;
+    if (!placaQ && !cargaQ && !filialQ) return res.json({ success: true, results: [] });
+    const pool = await new sql.ConnectionPool(dbDw).connect();
+    try {
+      let q = `SELECT TOP (200) [id],[filial],[carga],[dt_entrega],[placa],[tipo_entrega],[motorista],[peso],[status],[telefone],[cpf_cnpj],[criado_por],[dt_criacao]
+               FROM [dw].[dbo].[CARGAS_PORTARIA] WHERE 1=1`;
+      const reqDb = pool.request();
+      if (placaQ) { q += ' AND LOWER(placa) LIKE @placa'; reqDb.input('placa', sql.VarChar(200), '%' + placaQ.toLowerCase() + '%'); }
+      if (cargaQ) { q += ' AND LOWER(carga) LIKE @carga'; reqDb.input('carga', sql.VarChar(200), '%' + cargaQ.toLowerCase() + '%'); }
+      if (filialQ) { q += ' AND LOWER(filial) LIKE @filial'; reqDb.input('filial', sql.VarChar(200), '%' + filialQ.toLowerCase() + '%'); }
+      q += ' ORDER BY dt_criacao DESC';
+      const r = await reqDb.query(q);
+      const results = (r && r.recordset) ? r.recordset : [];
+      return res.json({ success: true, results });
+    } finally {
+      try { await pool.close(); } catch(_){ }
+    }
+  } catch (err) {
+    console.error('Erro na busca de CARGAS_PORTARIA:', err && err.message ? err.message : err);
+    return res.json({ success: false, results: [] });
+  }
+});
+
+app.get('/listagem/horarios-agendamento', ensureAuth, async (req, res) => {
+  try {
+    const pool = await new sql.ConnectionPool(dbDw).connect();
+    try {
+      const q = `SELECT [id],[pedido],[data],[nome_cli],[cod_cli],[categoria],[observacao],[criado_por],[status],[data_entrada],[data_saida],[dt_criacao]
+                 FROM [dw].[dbo].[HORARIOS_AGENDAMENTO]
+                 ORDER BY dt_criacao DESC`;
+      const r = await pool.request().query(q);
+      const agendamentos = (r && r.recordset) ? r.recordset : [];
+      return res.render('horarios_agendamento_list', { agendamentos: agendamentos, user: { nome: req.session.user_name || req.session.username || req.cookies && req.cookies.username || 'Usuário', email: req.session.user_email || req.cookies && req.cookies.user_email || '', id: req.session.user_id || req.session.userID || null } });
+    } finally {
+      try { await pool.close(); } catch(_){ }
+    }
+  } catch (err) {
+    console.error('Erro ao buscar HORARIOS_AGENDAMENTO:', err && err.message ? err.message : err);
+    return res.render('horarios_agendamento_list', { agendamentos: [], user: { nome: req.session.user_name || req.session.username || req.cookies && req.cookies.username || 'Usuário', email: req.session.user_email || req.cookies && req.cookies.user_email || '', id: req.session.user_id || req.session.userID || null } });
+  }
+});
+
+app.post('/horarios-agendamento/concluir', ensureAuth, express.json(), async (req, res) => {
+  try {
+    const id = req.body && req.body.id ? parseInt(req.body.id, 10) : null;
+    if (!id) return res.status(400).json({ success: false, message: 'ID inválido' });
+    const pool = await new sql.ConnectionPool(dbDw).connect();
+    try {
+      const q = `UPDATE [dw].[dbo].[HORARIOS_AGENDAMENTO] SET status = 'Concluído', data_saida = GETDATE() WHERE id = @id`;
+      await pool.request().input('id', sql.Int, id).query(q);
+      return res.json({ success: true });
+    } finally { try { await pool.close(); } catch(_){ } }
+  } catch (err) { console.error('Erro ao concluir agendamento:', err && err.message ? err.message : err); return res.status(500).json({ success: false }); }
+});
+
+app.post('/horarios-agendamento/delete', ensureAuth, express.json(), async (req, res) => {
+  try {
+    const id = req.body && req.body.id ? parseInt(req.body.id, 10) : null;
+    if (!id) return res.status(400).json({ success: false, message: 'ID inválido' });
+    const pool = await new sql.ConnectionPool(dbDw).connect();
+    try {
+      const q = 'DELETE FROM [dw].[dbo].[HORARIOS_AGENDAMENTO] WHERE id = @id';
+      await pool.request().input('id', sql.Int, id).query(q);
+      return res.json({ success: true });
+    } finally { try { await pool.close(); } catch(_){ } }
+  } catch (err) { console.error('Erro ao excluir agendamento:', err && err.message ? err.message : err); return res.status(500).json({ success: false }); }
 });
 
 app.post('/cargas-portaria/concluir', ensureAuth, express.json(), async (req, res) => {
@@ -859,7 +1056,6 @@ app.post('/agendamentos', ensureAuth, express.json(), async (req, res) => {
   }
 });
 
-// Delete agendamento
 app.post('/agendamentos/delete', ensureAuth, express.json(), async (req, res) => {
   try {
     const id = req.body && req.body.id ? parseInt(req.body.id, 10) : null;
@@ -875,6 +1071,347 @@ app.post('/agendamentos/delete', ensureAuth, express.json(), async (req, res) =>
   } catch (err) {
     console.error('Erro ao excluir agendamento:', err && err.message ? err.message : err);
     return res.status(500).json({ success: false, message: 'Erro ao excluir agendamento' });
+  }
+});
+const horariosRetiraModel = require('./models/horariosRetiraModel');
+const conferenciaModel = require('./models/conferenciaModel');
+function formatIsoDate(dt) {
+  try {
+    const d = new Date(dt);
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const day = String(d.getDate()).padStart(2,'0');
+    const hh = String(d.getHours()).padStart(2,'0');
+    const min = String(d.getMinutes()).padStart(2,'0');
+    const sec = String(d.getSeconds()).padStart(2,'0');
+    return `${y}-${m}-${day} ${hh}:${min}:${sec}`;
+  } catch (e) { return String(dt); }
+}
+
+function parseLocalDateTimeString(s) {
+  try {
+    if (!s) return null;
+    const parts = String(s).trim().split(' ');
+    const datePart = parts[0] || '';
+    const timePart = (parts[1] || '00:00:00').split(':');
+    const dateSegments = datePart.split('-');
+    const y = parseInt(dateSegments[0], 10) || 0;
+    const m = parseInt(dateSegments[1], 10) || 1;
+    const d = parseInt(dateSegments[2], 10) || 1;
+    const hh = parseInt(timePart[0] || '0', 10) || 0;
+    const mm = parseInt(timePart[1] || '0', 10) || 0;
+    const ss = parseInt(timePart[2] || '0', 10) || 0;
+    return new Date(y, m-1, d, hh, mm, ss);
+  } catch (e) { return new Date(s); }
+}
+
+app.get('/horarios-retira', ensureAuth, async (req, res) => {
+  try {
+    const days = [];
+    let startIso = null;
+    let endIso = null;
+    const qStart = req.query && req.query.start ? String(req.query.start).trim() : null;
+    const qEnd = req.query && req.query.end ? String(req.query.end).trim() : null;
+    const today = new Date();
+    let startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    let endDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()+6);
+    if (qStart && qEnd) {
+      const parsedStart = parseLocalDateTimeString(qStart + ' 00:00:00');
+      const parsedEnd = parseLocalDateTimeString(qEnd + ' 23:59:59');
+      if (!isNaN(parsedStart.getTime()) && !isNaN(parsedEnd.getTime()) && parsedEnd >= parsedStart) {
+        const maxDays = 31;
+        const diffDays = Math.round((parsedEnd - parsedStart) / 86400000) + 1;
+        if (diffDays > maxDays) {
+          endDate = new Date(parsedStart.getFullYear(), parsedStart.getMonth(), parsedStart.getDate() + (maxDays - 1));
+        } else {
+          endDate = parsedEnd;
+        }
+        startDate = parsedStart;
+        startIso = qStart;
+        endIso = qEnd;
+      }
+    }
+    for (let d = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()), i = 0; d <= endDate; d.setDate(d.getDate()+1), i++) {
+      const copy = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const label = copy.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+      const isoDate = copy.getFullYear() + '-' + String(copy.getMonth()+1).padStart(2,'0') + '-' + String(copy.getDate()).padStart(2,'0');
+      days.push({ label, isoDate });
+    }
+    const startDateTime = parseLocalDateTimeString(days[0].isoDate + ' 00:00:00');
+    const endDateTime = parseLocalDateTimeString(days[days.length-1].isoDate + ' 23:59:59');
+    const reservationsRaw = await horariosRetiraModel.getReservationsBetween(startDate, endDate);
+    const reservations = (reservationsRaw||[]).map(r => Object.assign({}, r, { data: formatIsoDate(r.data) }));
+    const reservationsMap = {};
+    (reservations||[]).forEach(r => {
+      if (!r || !r.data) return;
+      if (!reservationsMap[r.data]) reservationsMap[r.data] = [];
+      reservationsMap[r.data].push(r);
+    });
+    return res.render('HorariosRetira/horarios_retira', { days, reservations, reservationsMap, filterStart: startIso, filterEnd: endIso, user: { nome: req.session.user_name || req.session.username || req.cookies && req.cookies.username || 'Usuário', email: req.session.user_email || req.cookies && req.cookies.user_email || '', id: req.session.user_id || req.session.userID || null } });
+  } catch (e) {
+    console.error('Erro ao renderizar horarios-retira:', e && e.message ? e.message : e);
+    return res.render('HorariosRetira/horarios_retira', { days: [], reservations: [], reservationsMap: {}, filterStart: null, filterEnd: null, user: { nome: req.session.user_name || req.session.username || req.cookies && req.cookies.username || 'Usuário', email: req.session.user_email || req.cookies && req.cookies.user_email || '', id: req.session.user_id || req.session.userID || null } });
+  }
+});
+
+app.post('/horarios-retira/search', ensureAuth, express.json(), async (req, res) => {
+  try {
+    const term = (req.body && req.body.term) ? String(req.body.term).trim() : '';
+    if (!term) return res.json({ success: true, data: [] });
+    const pool = await new sql.ConnectionPool(dbDw).connect();
+    try {
+      const like = '%' + term + '%';
+      const q = `SELECT TOP 50
+                f.[CODFIL], f.[NUMERO], f.[DT_EMISSAO], f.[CLIENTE], f.[LOJA], f.[MENNOTA], f.[COD_VENDEDOR], f.[NUM_AFV], f.[CONDPAG], f.[CODTAB], f.[CODTRANSP], f.[TPFRETE], f.[PERC_DESC], f.[SERIE], f.[DT_INCLUSAO], f.[DT_ALTERACAO], f.[CODVEND1], f.[FRMPAG], f.[CODTELE], f.[VOLUME1],
+                c.CHAVE_CLIENTE AS DIM_CHAVE_CLIENTE, c.NOME AS DIM_NOME, c.FANTASIA AS DIM_FANTASIA
+              FROM [dw].[dbo].[FATO_PEDIDOS] f
+              LEFT JOIN [dw].[dbo].[DIM_CLIENTES] c ON c.CHAVE_CLIENTE = (CAST(f.CLIENTE AS NVARCHAR(100)) + CAST(f.LOJA AS NVARCHAR(50)))
+              WHERE CAST(f.[NUMERO] AS NVARCHAR(100)) = @term
+                OR CAST(f.[NUMERO] AS NVARCHAR(100)) LIKE @like
+                OR (CAST(f.CLIENTE AS NVARCHAR(100)) + CAST(f.LOJA AS NVARCHAR(50))) = @term
+                OR (CAST(f.CLIENTE AS NVARCHAR(100)) + CAST(f.LOJA AS NVARCHAR(50))) LIKE @like
+                OR c.CHAVE_CLIENTE = @term
+                OR c.CHAVE_CLIENTE LIKE @like`;
+      const r = await pool.request().input('term', sql.VarChar, term).input('like', sql.VarChar, like).query(q);
+          const data = (r.recordset || []).map(row => {
+        return Object.assign({}, row, {
+          Pedido: row.NUMERO,
+          Cod_Cli: row.CLIENTE || null,
+          Loja: row.LOJA || null,
+          Chave_Cliente: row.DIM_CHAVE_CLIENTE || (String(row.CLIENTE||'') + String(row.LOJA||'')),
+          Nome_Cliente: row.DIM_NOME || row.DIM_FANTASIA || null
+        });
+      });
+      return res.json({ success: true, data });
+    } finally {
+      try { await pool.close(); } catch(_){}
+    }
+  } catch (e) {
+    console.error('Erro search horarios-retira:', e && e.message ? e.message : e);
+    return res.status(500).json({ success: false, message: 'Erro na busca' });
+  }
+});
+
+app.post('/horarios-retira/book', ensureAuth, express.json(), async (req, res) => {
+  try {
+    const payload = req.body || {};
+    const dt = payload.data || null;
+    if (!dt) return res.status(400).json({ success: false, message: 'data ausente' });
+    const usuario = (req && req.session && (req.session.user_name || req.session.username)) ? (req.session.user_name || req.session.username) : (req && req.cookies && req.cookies.username) ? req.cookies.username : null;
+    const toInsert = {
+      pedido: payload.pedido || null,
+      dt_horario: parseLocalDateTimeString(String(dt)),
+      usuario,
+      cliente_nome: payload.nome_cli || null,
+      cliente_cod: payload.cod_cli || null,
+      chave_cli: payload.chave_cli || null,
+      loja: payload.loja || null
+      ,
+      nf: payload.nf || null,
+      categoria: payload.categoria || null,
+      observacao: payload.observacao || null
+    };
+    try {
+      if (!toInsert.cliente_nome && (toInsert.chave_cli || toInsert.cliente_cod)) {
+        const pool = await new sql.ConnectionPool(dbDw).connect();
+        try {
+          let found = null;
+          if (toInsert.chave_cli) {
+            const r = await pool.request().input('ch', sql.VarChar, String(toInsert.chave_cli)).query('SELECT TOP 1 NOME, FANTASIA FROM [dw].[dbo].[DIM_CLIENTES] WHERE CHAVE_CLIENTE = @ch');
+            if (r.recordset && r.recordset[0]) found = r.recordset[0];
+          }
+          if (!found && toInsert.cliente_cod) {
+            const r2 = await pool.request().input('cod', sql.VarChar, String(toInsert.cliente_cod)).query('SELECT TOP 1 NOME, FANTASIA FROM [dw].[dbo].[DIM_CLIENTES] WHERE COD_CLIENTE = @cod');
+            if (r2.recordset && r2.recordset[0]) found = r2.recordset[0];
+          }
+          if (found) {
+            toInsert.cliente_nome = (found.FANTASIA && String(found.FANTASIA).trim()) ? found.FANTASIA : (found.NOME || toInsert.cliente_nome);
+          }
+        } finally {
+          try { await pool.close(); } catch(_){}
+        }
+      }
+
+      if (toInsert.pedido) {
+        const poolCheck = await new sql.ConnectionPool(dbDw).connect();
+        try {
+          const qCheck = 'SELECT TOP 1 id, pedido, data FROM [dw].[dbo].[HORARIOS_AGENDAMENTO] WHERE pedido = @pedido';
+          const rCheck = await poolCheck.request().input('pedido', sql.NVarChar(100), String(toInsert.pedido)).query(qCheck);
+          const existing = (rCheck.recordset && rCheck.recordset[0]) ? rCheck.recordset[0] : null;
+          if (existing && existing.data) {
+            const ex = new Date(existing.data);
+            const exDateOnly = new Date(ex.getFullYear(), ex.getMonth(), ex.getDate());
+            const newDt = new Date(toInsert.dt_horario);
+            const newDateOnly = new Date(newDt.getFullYear(), newDt.getMonth(), newDt.getDate());
+            if (exDateOnly.getTime() !== newDateOnly.getTime()) {
+              return res.status(409).json({ success: false, message: 'Pedido já agendado em outra data' });
+            }
+          }
+        } finally {
+          try { await poolCheck.close(); } catch(_){}
+        }
+      }
+
+      const id = await horariosRetiraModel.createReservation(toInsert);
+      let inserted = null;
+      try {
+        inserted = await horariosRetiraModel.getReservationById(id);
+      } catch(_) { inserted = null; }
+      return res.json({ success: true, message: 'Reserva criada com sucesso', id, reservation: inserted });
+    } catch (err) {
+      if (err && err.code === 'SLOT_BOOKED') return res.status(409).json({ success: false, message: 'Horário já reservado' });
+      console.error('Erro ao criar reserva:', err && err.message ? err.message : err);
+      return res.status(500).json({ success: false, message: 'Erro ao criar reserva' });
+    }
+  } catch (e) {
+    console.error('Erro book horarios-retira:', e && e.message ? e.message : e);
+    return res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+app.post('/horarios-retira/book-multipart', ensureAuth, upload.single('attachment'), async (req, res) => {
+  try {
+    const payload = req.body || {};
+    const dt = payload.data || null;
+    if (!dt) return res.status(400).json({ success: false, message: 'data ausente' });
+    const usuario = (req && req.session && (req.session.user_name || req.session.username)) ? (req.session.user_name || req.session.username) : (req && req.cookies && req.cookies.username) ? req.cookies.username : null;
+    const toInsert = {
+      pedido: payload.pedido || null,
+      dt_horario: parseLocalDateTimeString(String(dt)),
+      usuario,
+      cliente_nome: payload.nome_cli || null,
+      cliente_cod: payload.cod_cli || null,
+      chave_cli: payload.chave_cli || null,
+      loja: payload.loja || null,
+      nf: payload.nf || null,
+      categoria: payload.categoria || null,
+      observacao: payload.observacao || null
+    };
+
+    if (req.file) {
+      const resolvedPath = path.resolve(req.file.path);
+      toInsert.attachment_name = req.file.originalname;
+      try {
+        const buf = fs.readFileSync(req.file.path);
+        toInsert.attachment_b64 = buf.toString('base64');
+        toInsert.attachment_mimetype = req.file.mimetype || null;
+      } catch (e) {
+        console.error('Erro ao ler arquivo para converter em base64:', e && e.message ? e.message : e);
+      }
+      try {
+        fs.unlinkSync(req.file.path);
+        toInsert.attachment_path = null;
+      } catch (e) {
+        console.error('Erro ao remover arquivo de upload:', e && e.message ? e.message : e);
+      }
+    }
+
+    try {
+      if (!toInsert.cliente_nome && (toInsert.chave_cli || toInsert.cliente_cod)) {
+        const pool = await new sql.ConnectionPool(dbDw).connect();
+        try {
+          let found = null;
+          if (toInsert.chave_cli) {
+            const r = await pool.request().input('ch', sql.VarChar, String(toInsert.chave_cli)).query('SELECT TOP 1 NOME, FANTASIA FROM [dw].[dbo].[DIM_CLIENTES] WHERE CHAVE_CLIENTE = @ch');
+            if (r.recordset && r.recordset[0]) found = r.recordset[0];
+          }
+          if (!found && toInsert.cliente_cod) {
+            const r2 = await pool.request().input('cod', sql.VarChar, String(toInsert.cliente_cod)).query('SELECT TOP 1 NOME, FANTASIA FROM [dw].[dbo].[DIM_CLIENTES] WHERE COD_CLIENTE = @cod');
+            if (r2.recordset && r2.recordset[0]) found = r2.recordset[0];
+          }
+          if (found) {
+            toInsert.cliente_nome = (found.FANTASIA && String(found.FANTASIA).trim()) ? found.FANTASIA : (found.NOME || toInsert.cliente_nome);
+          }
+        } finally {
+          try { await pool.close(); } catch(_){}
+        }
+      }
+
+      if (toInsert.pedido) {
+        const poolCheck = await new sql.ConnectionPool(dbDw).connect();
+        try {
+          const qCheck = 'SELECT TOP 1 id, pedido, data FROM [dw].[dbo].[HORARIOS_AGENDAMENTO] WHERE pedido = @pedido';
+          const rCheck = await poolCheck.request().input('pedido', sql.NVarChar(100), String(toInsert.pedido)).query(qCheck);
+          const existing = (rCheck.recordset && rCheck.recordset[0]) ? rCheck.recordset[0] : null;
+          if (existing && existing.data) {
+            const ex = new Date(existing.data);
+            const exDateOnly = new Date(ex.getFullYear(), ex.getMonth(), ex.getDate());
+            const newDt = new Date(toInsert.dt_horario);
+            const newDateOnly = new Date(newDt.getFullYear(), newDt.getMonth(), newDt.getDate());
+            if (exDateOnly.getTime() !== newDateOnly.getTime()) {
+              return res.status(409).json({ success: false, message: 'Pedido já agendado em outra data' });
+            }
+          }
+        } finally {
+          try { await poolCheck.close(); } catch(_){ }
+        }
+      }
+
+      const id = await horariosRetiraModel.createReservation(toInsert);
+      let inserted = null;
+      try { inserted = await horariosRetiraModel.getReservationById(id); } catch(_) { inserted = null; }
+      return res.json({ success: true, message: 'Reserva criada com sucesso', id, reservation: inserted });
+    } catch (err) {
+      if (err && err.code === 'SLOT_BOOKED') return res.status(409).json({ success: false, message: 'Horário já reservado' });
+      console.error('Erro ao criar reserva:', err && err.message ? err.message : err);
+      return res.status(500).json({ success: false, message: 'Erro ao criar reserva' });
+    }
+  } catch (e) {
+    console.error('Erro book horarios-retira (multipart):', e && e.message ? e.message : e);
+    return res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+app.get('/horarios-retira/debug', ensureAuth, async (req, res) => {
+  try {
+    const days = [];
+    const today = new Date();
+    for (let i=0;i<7;i++) {
+      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate()+i);
+      const isoDate = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+      days.push({ isoDate });
+    }
+    const startDate = new Date(days[0].isoDate + 'T00:00:00');
+    const endDate = new Date(days[days.length-1].isoDate + 'T23:59:59');
+    const reservations = await horariosRetiraModel.getReservationsBetween(startDate, endDate);
+    return res.json({ success: true, startDate: startDate.toISOString(), endDate: endDate.toISOString(), count: (reservations||[]).length, reservations });
+  } catch (e) {
+    console.error('Erro debug horarios-retira:', e && e.message ? e.message : e);
+    return res.status(500).json({ success: false, message: 'Erro debug' });
+  }
+});
+
+app.get('/horarios-retira/debug/check', ensureAuth, async (req, res) => {
+  try {
+    const dtRaw = req.query && req.query.dt ? String(req.query.dt) : null;
+    if (!dtRaw) return res.status(400).json({ success: false, message: 'dt query param required (YYYY-MM-DD HH:MM:SS)' });
+    const iso = dtRaw.includes('T') ? dtRaw : dtRaw.replace(' ', 'T');
+    const dt = new Date(iso);
+    if (isNaN(dt.getTime())) return res.status(400).json({ success: false, message: 'invalid dt' });
+    const r = await horariosRetiraModel.getReservationByDateTime(dt);
+    return res.json({ success: true, found: !!r, reservation: r });
+  } catch (e) {
+    console.error('Erro debug check horarios-retira:', e && e.message ? e.message : e);
+    return res.status(500).json({ success: false, message: 'Erro debug check' });
+  }
+});
+
+app.get('/horarios-retira/debug/all', ensureAuth, async (req, res) => {
+  try {
+    const pool = await new sql.ConnectionPool(dbDw).connect();
+    try {
+            const q = `SELECT COUNT(*) AS total FROM [dw].[dbo].[HORARIOS_AGENDAMENTO];
+              SELECT TOP 50 id, pedido, data, nf, categoria, observacao, nome_cli, cod_cli, status, criado_por, dt_criacao FROM [dw].[dbo].[HORARIOS_AGENDAMENTO] ORDER BY dt_criacao DESC`;
+      const r = await pool.request().query(q);
+      const total = (r.recordsets && r.recordsets[0] && r.recordsets[0][0]) ? r.recordsets[0][0].total : null;
+      const rows = (r.recordsets && r.recordsets[1]) ? r.recordsets[1] : (r.recordset || []);
+      return res.json({ success: true, total, rows });
+    } finally {
+      try { await pool.close(); } catch(_){}
+    }
+  } catch (e) {
+    console.error('Erro debug all horarios-retira:', e && e.message ? e.message : e);
+    return res.status(500).json({ success: false, message: 'Erro debug all' });
   }
 });
 

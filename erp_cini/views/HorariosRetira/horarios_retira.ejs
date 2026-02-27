@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Horários Retira</title>
+    <%- include('../System/headIncludes.ejs') %>
+    <style>
+      .calendar { width:100%; border-collapse:collapse; font-size:11px; }
+      .calendar th, .calendar td { border:1px solid #ddd; padding:2px 3px; text-align:center; }
+      .hour-cell { height:30px; vertical-align:middle; }
+      /* reservation block background (applies only to the top reservation in the slot) */
+      .reservation-block.reserved-block { background:#e6ffe6; padding:6px; border-radius:4px; }
+      .result-row { padding:6px;border-bottom:1px solid #eee; cursor:pointer; }
+      .slot-btn { width:100%; padding:1px 6px; font-size:10px; line-height:1.0; }
+      .slot-btn.btn-primary { background-color:#5bb8ff; border-color:#5bb8ff; color:#04263b; }
+      .slot-btn.btn-primary:hover { background-color:#49aef0; border-color:#49aef0; color:#04263b; }
+      @media (max-height:1000px) {
+        .hour-cell { height:26px; }
+        .calendar th, .calendar td { padding:1px 2px; }
+        .slot-btn { font-size:9px; padding:1px 4px; }
+      }
+      .page-info { margin-bottom: 4px; }
+      .content { padding-top: 6px; }
+      .card { margin-top: 0; }
+      .slot-gray { background:#e9ecef !important; color:#6c757d !important; }
+      .slot-red { background:#ff6b6b !important; color:#04263b !important; }
+      .slot-yellow { background:#fff3cd !important; color:#04263b !important; }
+      .slot-green { background:#d4f7dc !important; color:#04263b !important; }
+      .slot-upcoming { background:#d0f0ff !important; color:#04263b !important; }
+      .slot-btn[disabled] { background:#e9ecef !important; color:#6c757d !important; border-color:#e9ecef !important; }
+      .slot-btn:focus, .reserve-btn:focus, .btn-outline-secondary:focus { outline: none !important; box-shadow: none !important; }
+      .calendar td, .slot-btn, .slot-btn * { transition: none !important; -webkit-tap-highlight-color: transparent !important; }
+      .day-cell.has-reservations { cursor: pointer; }
+      .day-cell.has-reservations:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.08); transform: translateY(-1px); }
+      .day-cell.has-reservations.hovered { box-shadow: 0 4px 10px rgba(0,0,0,0.12); transform: translateY(-2px); }
+      .reservation-block { padding:6px; border-radius:4px; margin-bottom:4px; cursor: pointer; }
+      .reservation-block:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.08); transform: translateY(-1px); }
+      .reservation-block.hovered { box-shadow: 0 4px 10px rgba(0,0,0,0.12); transform: translateY(-2px); }
+    </style>
+  </head>
+  <body>
+    <div class="layout-container">
+      <%- include('../partials/sidebar') %>
+      <div class="main-content">
+        <div class="topbar">
+          <div class="topbar-left">
+            <div class="page-info">
+              <h1>Horários Retira</h1>
+              <p>Agende retiradas por horário</p>
+            </div>
+          </div>
+          <div class="topbar-right">
+            <%- include('../partials/userMenu') %>
+          </div>
+        </div>
+
+        <div class="content p-3">
+          <div class="card">
+            <div class="card-body">
+                <form class="row g-2 mb-3" method="GET" action="/horarios-retira">
+                  <div class="col-auto align-self-center">
+                    <label class="form-label mb-0">Período</label>
+                  </div>
+                  <div class="col-auto">
+                    <input type="date" class="form-control form-control-sm" id="filterStart" name="start" value="<%= filterStart || '' %>" />
+                  </div>
+                  <div class="col-auto">
+                    <input type="date" class="form-control form-control-sm" id="filterEnd" name="end" value="<%= filterEnd || '' %>" />
+                  </div>
+                  <div class="col-auto">
+                    <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+                    <button type="button" id="clearFilter" class="btn btn-sm btn-outline-secondary">Limpar</button>
+                  </div>
+                </form>
+              <div class="table-responsive">
+                <table class="calendar table table-bordered">
+                  <thead class="table-light">
+                    <tr>
+                      <th style="width:120px">Hora</th>
+                      <th style="width:36px" class="text-center align-middle"><button type="button" id="prevDays" class="btn btn-sm btn-outline-secondary" title="Anterior">←</button></th>
+                      <% days.forEach(function(d){ %>
+                        <% const _p = (d.isoDate||'').split('-'); const _disp = (_p[2]||'') + '/' + (_p[1]||'') + '/' + (_p[0]||''); %>
+                        <th class="day-header"><%= d.label %><br/><small><%= _disp %></small></th>
+                      <% }) %>
+                      <th style="width:36px" class="text-center align-middle"><button type="button" id="nextDays" class="btn btn-sm btn-outline-secondary" title="Próximo">→</button></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% const START_HOUR = 11; const END_HOUR = 21; for (let h=START_HOUR; h<=END_HOUR; h++) { %>
+                      <tr>
+                        <td><strong><%= (h<10? '0'+h : h) %>:00</strong></td>
+                        <td class="nav-cell"></td>
+                        <% days.forEach(function(d){ 
+                             const slotIso = (d.isoDate + ' ' + (h<10? '0'+h : h) + ':00:00');
+                             const rArr = reservationsMap && reservationsMap[slotIso] ? reservationsMap[slotIso] : [];
+                             const reservedClass = (rArr && rArr.length) ? 'has-reservations' : '';
+                        %>
+                          <td class="hour-cell day-cell <%= reservedClass %>" data-dt="<%= slotIso %>">
+                            <% if (rArr && rArr.length) { %>
+                              <% rArr.forEach(function(rr, idx){ %>
+                                  <div class="reservation-block <%= idx===0 ? 'reserved-block' : '' %>" data-idx="<%= idx %>">
+                                    <div><strong><%= rr.cliente_nome || rr.nome_cli || '' %></strong></div>
+                                    <div>Pedido: <strong><%= rr.pedido || '' %></strong> <%= (rr.NF || rr.nf) ? ' — NF: ' + (rr.NF || rr.nf) : '' %> — Categoria: <strong><%= (rr.categoria || '').toUpperCase() %></strong></div>
+                                  </div>
+                                  <% if (idx < rArr.length - 1) { %><hr style="margin:4px 0;" /> <% } %>
+                                <% }) %>
+                              <% for (let i = (rArr.length||0); i < 3; i++) { %>
+                                <div style="margin-top:4px;"><button class="btn btn-primary btn-sm slot-btn reserve-btn" data-dt="<%= slotIso %>">Disponível</button></div>
+                              <% } %>
+                            <% } else { %>
+                              <% for (let i=0;i<3;i++) { %>
+                                <div style="margin:2px 0;"><button class="btn btn-primary btn-sm slot-btn reserve-btn" data-dt="<%= slotIso %>">Disponível</button></div>
+                              <% } %>
+                            <% } %>
+                          </td>
+                        <% }) %>
+                        <td class="nav-cell"></td>
+                      </tr>
+                    <% } %>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Modal Bootstrap -->
+    <div class="modal fade" id="modalHorarios" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Agendar horário</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div>Horário: <strong id="modalDt"></strong></div>
+            <div class="input-group my-3">
+              <input id="searchTerm" type="text" class="form-control" placeholder="Número do pedido ou nome do cliente">
+              <button id="btnSearch" class="btn btn-primary">Buscar</button>
+            </div>
+            <div id="results" style="max-height:320px; overflow:auto;"></div>
+            <!-- Categoria and Observação moved to confirmation modal -->
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div class="modal fade" id="confirmBookingModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-md modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Confirmar agendamento</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-2">Pedido: <strong id="confirmPedido"></strong></div>
+            <div class="mb-2">Cliente: <strong id="confirmCodCli"></strong></div>
+            <div class="mb-2">NF: <strong id="confirmNF"></strong></div>
+            <div class="mb-2">Horário: <strong id="confirmDt"></strong></div>
+            <div class="mb-2">
+              <label class="form-label">Categoria</label>
+              <select id="confirmCategoria" class="form-select">
+                <option value="retira">Retira</option>
+                <option value="viagem">Viagem</option>
+                <option value="doacao">Doação</option>
+              </select>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Observação</label>
+              <textarea id="confirmObservacao" class="form-control" rows="2" placeholder="Observações (opcional)"></textarea>
+            </div>
+            <div class="mb-2 d-flex align-items-center" style="gap:8px;">
+              <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" value="1" id="confirmSendAttachment" />
+                <label class="form-check-label" for="confirmSendAttachment">Enviar anexo?</label>
+              </div>
+              <div id="confirmAttachmentWrapper" style="display:none; align-items:center;">
+                <input id="confirmAttachment" type="file" style="display:none;" accept="image/*,application/pdf" />
+                <label for="confirmAttachment" id="confirmAttachmentLabel" class="btn btn-outline-secondary btn-sm">Escolher arquivo</label>
+                <span id="confirmAttachmentName" class="small text-muted ms-2"></span>
+                <div id="confirmAttachmentPreview" style="width:120px; height:64px; margin-left:8px; display:none; border-radius:4px; background-position:center; background-size:cover; background-repeat:no-repeat; background-color:#f5f5f5; border:1px solid #e9ecef;"></div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="button" id="confirmBtn" class="btn btn-primary">Confirmar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+        <%- include('../System/bodyIncludes.ejs') %>
+    <script>
+      const reservations = <%- JSON.stringify(reservations || []) %>;
+      const reservationsMapClient = {};
+      (reservations||[]).forEach(r => {
+        try {
+          const raw = String(r.data || '');
+          const parts = raw.split(' ');
+          const datePart = parts[0] || '';
+          const timePart = (parts[1] || '00:00:00').split(':');
+          const dateSegments = datePart.split('-');
+          const y = dateSegments[0] || '';
+          const m = (dateSegments[1] || '').padStart(2, '0');
+          const d = (dateSegments[2] || '').padStart(2, '0');
+          const hh = (timePart[0] || '00').padStart(2, '0');
+          const iso = y + '-' + m + '-' + d + ' ' + hh + ':00:00';
+          if (!reservationsMapClient[iso]) reservationsMapClient[iso] = [];
+          reservationsMapClient[iso].push(r);
+        } catch (e) {}
+      });
+
+      const START_HOUR = 11;
+      const END_HOUR = 21;
+      function parseSlotIso(s) {
+        try {
+          const parts = String(s||'').split(' ');
+          const date = parts[0] || '';
+          const time = (parts[1] || '00:00:00').split(':');
+          const ds = date.split('-');
+          const y = parseInt(ds[0],10)||0;
+          const m = parseInt(ds[1],10)||1;
+          const d = parseInt(ds[2],10)||1;
+          const hh = parseInt(time[0]||'0',10)||0;
+          const mm = parseInt(time[1]||'0',10)||0;
+          const ss = parseInt(time[2]||'0',10)||0;
+          return new Date(y, m-1, d, hh, mm, ss);
+        } catch(e){ return new Date(s); }
+      }
+
+      function updateSlotColor(td, slotIso) {
+        try {
+          if (!td) return;
+          // apply same color class to all reservation blocks inside the cell
+          const blocks = td.querySelectorAll('.reservation-block');
+          const classes = ['slot-gray','slot-red','slot-yellow','slot-green','slot-upcoming'];
+          // clear existing classes on all blocks
+          blocks.forEach(b => { classes.forEach(c => b.classList.remove(c)); });
+          const rArr = reservationsMapClient[slotIso];
+          const r = Array.isArray(rArr) ? (rArr[0] || null) : rArr;
+          if (!r || !blocks.length) return;
+          const dt = parseSlotIso(slotIso);
+          const now = new Date();
+          const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const dtDateOnly = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+          const dayDiff = (dtDateOnly.getTime() - nowDateOnly.getTime()) / (24*60*60*1000);
+          let colorClass = 'slot-upcoming';
+          if (dtDateOnly.getTime() === nowDateOnly.getTime()) {
+            colorClass = 'slot-red';
+          } else if (dayDiff < 0) {
+            colorClass = 'slot-gray';
+          } else if (dayDiff <= 1) {
+            colorClass = 'slot-red';
+          } else if (dayDiff <= 3) {
+            colorClass = 'slot-yellow';
+          } else if (dayDiff <= 7) {
+            colorClass = 'slot-green';
+          }
+          blocks.forEach(b => b.classList.add(colorClass));
+        } catch(e) {}
+      }
+
+      const modalEl = document.getElementById('modalHorarios');
+      const bsModal = new bootstrap.Modal(modalEl);
+      const confirmModalEl = document.getElementById('confirmBookingModal');
+      const confirmBsModal = confirmModalEl ? new bootstrap.Modal(confirmModalEl) : null;
+      const modalDt = document.getElementById('modalDt');
+      const searchTerm = document.getElementById('searchTerm');
+      const results = document.getElementById('results');
+      const btnSearch = document.getElementById('btnSearch');
+      let currentDt = null;
+
+      document.addEventListener('click', function(e){
+        if (e.target.classList.contains('reserve-btn')) {
+          const dt = e.target.getAttribute('data-dt');
+          openModal(dt);
+        }
+      });
+
+      function openModal(dt) {
+        currentDt = dt;
+        try {
+          const iso = dt.includes('T') ? dt : dt.replace(' ', 'T');
+          const d = new Date(iso);
+          if (isNaN(d.getTime())) throw new Error('invalid date');
+          const weekday = d.toLocaleDateString('pt-BR', { weekday: 'long' });
+          const date = d.toLocaleDateString('pt-BR');
+          const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          modalDt.textContent = `${weekday} ${date} ${time}`;
+        } catch (e) {
+          modalDt.textContent = dt;
+        }
+        searchTerm.value = '';
+        results.innerHTML = '';
+        bsModal.show();
+      }
+
+      btnSearch.addEventListener('click', async function(){
+        const term = searchTerm.value && searchTerm.value.trim();
+        if (!term) return alert('Informe número do pedido ou nome do cliente');
+        results.innerHTML = '<div class="p-2">Buscando...</div>';
+        try {
+          const res = await fetch('/horarios-retira/search', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ term }) });
+          const data = await res.json();
+          if (!data.success) { results.innerHTML = '<div class="p-2">Erro na busca</div>'; return; }
+          const rows = data.data || [];
+          if (!rows.length) { results.innerHTML = '<div class="p-2">Nenhum pedido encontrado</div>'; return; }
+          results.innerHTML = '';
+          rows.forEach(r => {
+            const div = document.createElement('div');
+            div.className = 'result-row p-2';
+            const pedido = r.Pedido || r.NUMERO || r.PEDIDO || '';
+            const codCli = r.Cod_Cli || r.CLIENTE || r.CODFIL || '';
+            const nomeCli = r.Nome_Cliente || r.NOME || r.DIM_NOME || r.DIM_FANTASIA || '';
+            const nf = r.NF || r.Nf || r.nf || '';
+            let emissao = '';
+            if (r.DT_EMISSAO) {
+              try {
+                const d = new Date(r.DT_EMISSAO);
+                emissao = d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+              } catch(e) { emissao = String(r.DT_EMISSAO); }
+            }
+            div.innerHTML = '<div class="d-flex justify-content-between"><div><strong>Pedido: ' + pedido + '</strong> — Cliente: ' + codCli + (nomeCli ? ' — ' + nomeCli : '') + '</div><div><button class="btn btn-sm btn-success select-pedido">Selecionar</button></div></div>' +
+                            '<div class="small text-muted">Emissão: ' + (emissao || '') + (nf ? ' — NF: ' + nf : '') + '</div>';
+            div.querySelector('.select-pedido').addEventListener('click', function(){
+              openConfirmBooking({ row: r, pedido, codCli, nf, nomeCli });
+            });
+            results.appendChild(div);
+          });
+        } catch (e) { results.innerHTML = '<div class="p-2">Erro: ' + String(e) + '</div>'; }
+      });
+
+      async function bookSlot(r) {
+        try {
+          const payload = {
+            pedido: r.Pedido || r.NUMERO || r.PEDIDO || null,
+            nome_cli: r.Nome_Cliente || r.cliente_nome || null, 
+            cod_cli: r.Cod_Cli || r.CLIENTE || r.CODFIL || null,
+            chave_cli: r.Chave_Cliente || r.CHAVE_CLIENTE || null,
+            loja: r.Loja || r.LOJA || null,
+            nf: r.NF || r.Nf || r.nf || null,
+            data: currentDt,
+            categoria: (document.getElementById('confirmCategoria') && document.getElementById('confirmCategoria').value) ? document.getElementById('confirmCategoria').value : null,
+            observacao: (document.getElementById('confirmObservacao') && document.getElementById('confirmObservacao').value) ? document.getElementById('confirmObservacao').value : null
+          };
+          // if attachment is present, send multipart to the special endpoint
+          const attachEl = document.getElementById('confirmAttachment');
+          let data;
+          if (attachEl && attachEl.files && attachEl.files.length) {
+            const fd = new FormData();
+            Object.keys(payload).forEach(k => { if (payload[k] !== null && payload[k] !== undefined) fd.append(k, payload[k]); });
+            fd.append('attachment', attachEl.files[0]);
+            const res = await fetch('/horarios-retira/book-multipart', { method: 'POST', body: fd });
+            data = await res.json();
+          } else {
+            const res = await fetch('/horarios-retira/book', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify(payload) });
+            data = await res.json();
+          }
+          if (!data.success) return alert('Erro: ' + (data.message || 'não foi possível reservar'));
+          if (confirmBsModal) confirmBsModal.hide();
+          if (bsModal) bsModal.hide();
+            if (data.reservation) {
+            const rsv = data.reservation;
+            const displayName = rsv.cliente_nome || rsv.nome_cli || rsv.cliente_fantasia || '';
+            const pedidoVal = rsv.pedido || rsv.Pedido || rsv.pedido || '';
+              const nfVal = rsv.NF || rsv.nf || '';
+            const slotIso = currentDt;
+            if (!reservationsMapClient[slotIso]) reservationsMapClient[slotIso] = [];
+            reservationsMapClient[slotIso].push(rsv);
+            try { renderDays(); } catch(e) { location.reload(); }
+            // clear attachment UI after successful booking
+            try {
+              const sendCb = document.getElementById('confirmSendAttachment');
+              const wrapper = document.getElementById('confirmAttachmentWrapper');
+              const attachEl = document.getElementById('confirmAttachment');
+              const nameEl = document.getElementById('confirmAttachmentName');
+              const previewEl = document.getElementById('confirmAttachmentPreview');
+              if (sendCb) { sendCb.checked = false; }
+              if (wrapper) { wrapper.style.display = 'none'; }
+              if (attachEl) { try { attachEl.value = null; } catch(_){} }
+              if (nameEl) { nameEl.textContent = ''; }
+              if (previewEl) { try { previewEl.style.backgroundImage = ''; previewEl.style.display = 'none'; } catch(_){} }
+            } catch(_) {}
+            try { pendingBooking = null; } catch(_) {}
+            return;
+          }
+          location.reload();
+        } catch (e) { alert('Erro: ' + String(e)); }
+      }
+      let pendingBooking = null;
+      function formatDisplayDt(dtStr){
+        try {
+          const iso = dtStr.includes('T') ? dtStr : dtStr.replace(' ', 'T');
+          const d = new Date(iso);
+          if (isNaN(d.getTime())) return dtStr;
+          const weekday = d.toLocaleDateString('pt-BR', { weekday: 'long' });
+          const date = d.toLocaleDateString('pt-BR');
+          const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          return `${weekday} ${date} ${time}`;
+        } catch (e) { return dtStr; }
+      }
+
+      function openConfirmBooking({ row, pedido, codCli, nf }){
+        pendingBooking = row;
+        const pedidoEl = document.getElementById('confirmPedido');
+        const codEl = document.getElementById('confirmCodCli');
+        const nfEl = document.getElementById('confirmNF');
+        const dtEl = document.getElementById('confirmDt');
+        if (pedidoEl) pedidoEl.textContent = pedido || '';
+        const nomeCli = (row && (row.Nome_Cliente || row.cliente_nome || row.NOME || row.DIM_NOME || row.DIM_FANTASIA)) ? (row.Nome_Cliente || row.cliente_nome || row.NOME || row.DIM_NOME || row.DIM_FANTASIA) : null;
+        if (codEl) codEl.textContent = (codCli || '') + (nomeCli ? ' — ' + nomeCli : '');
+        if (nfEl) nfEl.textContent = nf || '';
+        if (dtEl) dtEl.textContent = formatDisplayDt(currentDt || '');
+        try { if (document.getElementById('confirmCategoria')) document.getElementById('confirmCategoria').value = (row && row.categoria) ? row.categoria : 'retira'; } catch(_) {}
+        try { if (document.getElementById('confirmObservacao')) document.getElementById('confirmObservacao').value = (row && row.observacao) ? row.observacao : ''; } catch(_) {}
+        try {
+          const sendCb = document.getElementById('confirmSendAttachment');
+          const wrapper = document.getElementById('confirmAttachmentWrapper');
+          const attachEl = document.getElementById('confirmAttachment');
+          const nameEl = document.getElementById('confirmAttachmentName');
+          const previewEl = document.getElementById('confirmAttachmentPreview');
+          if (sendCb) { sendCb.checked = false; }
+          if (wrapper) { wrapper.style.display = 'none'; }
+          if (attachEl) { try { attachEl.value = null; } catch(_){} }
+          if (nameEl) { nameEl.textContent = ''; }
+          if (previewEl) { try { previewEl.style.backgroundImage = ''; previewEl.style.display = 'none'; } catch(_){} }
+        } catch(_) {}
+        if (confirmBsModal) confirmBsModal.show();
+      }
+
+      const confirmBtn = document.getElementById('confirmBtn');
+      if (confirmBtn) confirmBtn.addEventListener('click', function(){
+        if (!pendingBooking) return;
+        if (confirmBsModal) confirmBsModal.hide();
+        bookSlot(pendingBooking);
+      });
+
+      const confirmSendAttachment = document.getElementById('confirmSendAttachment');
+      const confirmAttachmentWrapper = document.getElementById('confirmAttachmentWrapper');
+      if (confirmSendAttachment) {
+        confirmSendAttachment.addEventListener('change', function(){
+          if (confirmSendAttachment.checked) confirmAttachmentWrapper.style.display = 'flex';
+          else {
+            confirmAttachmentWrapper.style.display = 'none';
+            const attachEl = document.getElementById('confirmAttachment');
+            const nameEl = document.getElementById('confirmAttachmentName');
+            const previewEl = document.getElementById('confirmAttachmentPreview');
+            if (attachEl) {
+              try { attachEl.value = null; } catch(_) {}
+            }
+            if (nameEl) nameEl.textContent = '';
+            if (previewEl) { previewEl.src = ''; previewEl.style.display = 'none'; }
+          }
+        });
+      }
+
+      const confirmAttachment = document.getElementById('confirmAttachment');
+      const confirmAttachmentName = document.getElementById('confirmAttachmentName');
+      const confirmAttachmentPreview = document.getElementById('confirmAttachmentPreview');
+      if (confirmAttachment) {
+        confirmAttachment.addEventListener('change', function(){
+          if (confirmAttachment.files && confirmAttachment.files.length) {
+            const f = confirmAttachment.files[0];
+            confirmAttachmentName.textContent = f.name;
+            try {
+              if (f.type && f.type.startsWith('image/')) {
+                try {
+                  const reader = new FileReader();
+                  reader.onload = function(ev) {
+                    try {
+                      confirmAttachmentPreview.style.backgroundImage = 'url("' + ev.target.result + '")';
+                      confirmAttachmentPreview.style.display = 'inline-block';
+                    } catch(e2) {
+                      confirmAttachmentPreview.style.backgroundImage = '';
+                      confirmAttachmentPreview.style.display = 'none';
+                    }
+                  };
+                  reader.onerror = function(){
+                    try {
+                      const url = URL.createObjectURL(f);
+                      confirmAttachmentPreview.style.backgroundImage = 'url("' + url + '")';
+                      confirmAttachmentPreview.style.display = 'inline-block';
+                    } catch(_) {
+                      confirmAttachmentPreview.style.backgroundImage = '';
+                      confirmAttachmentPreview.style.display = 'none';
+                    }
+                  };
+                  reader.readAsDataURL(f);
+                } catch(frErr) {
+                  try {
+                    const url = URL.createObjectURL(f);
+                    confirmAttachmentPreview.style.backgroundImage = 'url("' + url + '")';
+                    confirmAttachmentPreview.style.display = 'inline-block';
+                  } catch(_) {
+                    confirmAttachmentPreview.style.backgroundImage = '';
+                    confirmAttachmentPreview.style.display = 'none';
+                  }
+                }
+              } else {
+                confirmAttachmentPreview.src = '';
+                confirmAttachmentPreview.style.display = 'none';
+              }
+            } catch(e) {
+              confirmAttachmentPreview.src = '';
+              confirmAttachmentPreview.style.display = 'none';
+            }
+          } else {
+            confirmAttachmentName.textContent = '';
+            if (confirmAttachmentPreview) { confirmAttachmentPreview.src = ''; confirmAttachmentPreview.style.display = 'none'; }
+          }
+        });
+      }
+
+      const clientDays = <%- JSON.stringify(days || []) %>;
+      let dayOffset = 0;
+      function pad(n){ return String(n).padStart(2,'0'); }
+      function computeDayIsos(offset){
+        return clientDays.map(d => {
+          const dt = new Date(d.isoDate);
+          dt.setDate(dt.getDate() + offset);
+          return dt.getFullYear() + '-' + pad(dt.getMonth()+1) + '-' + pad(dt.getDate());
+        });
+      }
+
+      function renderDays(){
+        const dayHeaders = document.querySelectorAll('.calendar thead th.day-header');
+        const dayIsos = computeDayIsos(dayOffset);
+        dayHeaders.forEach((th, idx) => {
+          const iso = dayIsos[idx];
+          const d = new Date(iso);
+          const label = d.toLocaleDateString('pt-BR', { weekday: 'short' });
+          const parts = (iso || '').split('-');
+          const disp = (parts[2] || '') + '/' + (parts[1] || '') + '/' + (parts[0] || '');
+          th.innerHTML = label + '<br/><small>' + disp + '</small>';
+        });
+
+        const rows = document.querySelectorAll('.calendar tbody tr');
+                        rows.forEach((tr, idx) => {
+          const hour = START_HOUR + idx;
+          const tds = tr.querySelectorAll('td.day-cell');
+          for (let j=0; j<tds.length; j++){
+            const dayIso = dayIsos[j];
+            const hh = (hour<10? '0'+hour : hour);
+            const slotIso = dayIso + ' ' + hh + ':00:00';
+            const td = tds[j];
+            const rArr = reservationsMapClient[slotIso] ? reservationsMapClient[slotIso] : [];
+            td.setAttribute('data-dt', slotIso);
+            td.classList.remove('reserved','slot-gray','slot-red','slot-yellow','slot-green','slot-upcoming');
+                if (rArr && rArr.length) {
+                td.classList.add('has-reservations');
+                let html = '';
+                for (let k=0;k<rArr.length;k++){
+                  const rr = rArr[k];
+                  const nfCell = rr.NF || rr.nf || '';
+                  html += '<div class="reservation-block ' + (k===0? 'reserved-block':'') + '" data-idx="' + k + '"><div><strong>' + (rr.cliente_nome || rr.nome_cli || '') + '</strong></div>' +
+                          '<div>Pedido: <strong>' + (rr.pedido || '') + '</strong>' + (nfCell ? ' — NF: ' + nfCell : '') + ' — Categoria: <strong>' + ((rr.categoria || '').toUpperCase()) + '</strong></div></div>';
+                  if (k < rArr.length - 1) html += '<hr style="margin:4px 0;" />';
+                }
+                for (let k = rArr.length; k < 3; k++) {
+                  html += '<div style="margin-top:4px;"><button class="btn btn-primary btn-sm slot-btn reserve-btn" data-dt="' + slotIso + '">Disponível</button></div>';
+                }
+                td.innerHTML = html;
+                try { updateSlotColor(td, slotIso); } catch(e) {}
+              } else {
+              td.classList.remove('reserved');
+              try {
+                const dtObj = parseSlotIso(slotIso);
+                const now = new Date();
+                const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const dtDateOnly = new Date(dtObj.getFullYear(), dtObj.getMonth(), dtObj.getDate());
+                const dayDiff = (dtDateOnly.getTime() - nowDateOnly.getTime()) / (24*60*60*1000);
+                if (dayDiff < 0) {
+                  td.classList.add('slot-gray');
+                  td.innerHTML = '<button class="btn btn-sm slot-btn" disabled>Indisponível</button>';
+                } else {
+                  td.classList.remove('slot-gray');
+                  let html = '';
+                  for (let k=0;k<3;k++) html += '<div style="margin:2px 0;"><button class="btn btn-primary btn-sm slot-btn reserve-btn" data-dt="' + slotIso + '">Disponível</button></div>';
+                  td.innerHTML = html;
+                }
+              } catch(e) {
+                td.classList.remove('slot-gray');
+                let html = '';
+                for (let k=0;k<3;k++) html += '<div style="margin:2px 0;"><button class="btn btn-primary btn-sm slot-btn reserve-btn" data-dt="' + slotIso + '">Disponível</button></div>';
+                td.innerHTML = html;
+              }
+            }
+          }
+        });
+      }
+
+      document.getElementById('prevDays').addEventListener('click', function(e){ dayOffset -= 1; renderDays(); try{ e.currentTarget.blur(); }catch(_){ } });
+      document.getElementById('nextDays').addEventListener('click', function(e){ dayOffset += 1; renderDays(); try{ e.currentTarget.blur(); }catch(_){ } });
+      try {
+        document.getElementById('prevDays').addEventListener('mousedown', function(e){ e.preventDefault(); });
+        document.getElementById('nextDays').addEventListener('mousedown', function(e){ e.preventDefault(); });
+      } catch(_) {}
+      renderDays();
+      try { setTimeout(function(){ document.activeElement && document.activeElement.blur(); }, 0); } catch(_) { }
+      const clearFilterBtn = document.getElementById('clearFilter');
+      if (clearFilterBtn) clearFilterBtn.addEventListener('click', function(){ window.location.href = '/horarios-retira'; });
+    </script>
+    <div class="modal fade" id="reservationDetailsModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-md modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Detalhes da Reserva</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div id="detList"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function showReservationDetailsFromTd(td) {
+        try {
+          if (!td) return;
+          const slotIso = td.getAttribute('data-dt');
+          const r = reservationsMapClient[slotIso] || null;
+          if (!r) return;
+          try {
+            const rArr = Array.isArray(r) ? r : [r];
+            const parts = [];
+            for (let i=0;i<rArr.length;i++){
+              const rr = rArr[i];
+              const nfCell = rr.NF || rr.nf || '';
+              const bloco = '<div style="padding:6px;border:1px solid #eee;margin-bottom:6px;border-radius:4px;">' +
+                '<div><strong>' + (rr.cliente_nome || rr.nome_cli || '') + '</strong></div>' +
+                '<div>Pedido: <strong>' + (rr.pedido || '') + '</strong>' + (nfCell ? ' — NF: ' + nfCell : '') + ' — Categoria: <strong>' + ((rr.categoria||'').toUpperCase()) + '</strong></div>' +
+                '<div>Horário: <strong>' + formatDisplayDt(slotIso || '') + '</strong></div>' +
+                '<div>Status: <strong>' + (rr.status || '') + '</strong></div>' +
+                '<div>Entrada: <strong>' + (rr.data_entrada || rr.dataentrada || '') + '</strong></div>' +
+                '<div>Saída: <strong>' + (rr.data_saida || rr.datasaida || '') + '</strong></div>' +
+                '<div class="mt-2">Observação:</div><div class="small text-muted" style="white-space:pre-wrap">' + (rr.observacao || rr.obs || '') + '</div>' +
+                '</div>';
+              parts.push(bloco);
+            }
+            const detList = document.getElementById('detList');
+            if (detList) detList.innerHTML = parts.join('');
+          } catch(_) {}
+          const detailsModalEl = document.getElementById('reservationDetailsModal');
+          if (detailsModalEl) {
+            try { new bootstrap.Modal(detailsModalEl).show(); } catch(_) {}
+          }
+        } catch(_) {}
+      }
+
+      function showReservationDetailsFromBlock(block) {
+        try {
+          if (!block) return;
+          const td = block.closest && block.closest('td[data-dt]');
+          if (!td) return;
+          const slotIso = td.getAttribute('data-dt');
+          const idx = parseInt(block.getAttribute('data-idx') || '0', 10);
+          const rArr = reservationsMapClient[slotIso] || [];
+          const rr = rArr[idx] || null;
+          if (!rr) return;
+          try {
+            const nfCell = rr.NF || rr.nf || '';
+            const bloco = '<div style="padding:6px;border:1px solid #eee;margin-bottom:6px;border-radius:4px;">' +
+              '<div><strong>' + (rr.cliente_nome || rr.nome_cli || '') + '</strong></div>' +
+              '<div>Pedido: <strong>' + (rr.pedido || '') + '</strong>' + (nfCell ? ' — NF: ' + nfCell : '') + ' — Categoria: <strong>' + ((rr.categoria||'').toUpperCase()) + '</strong></div>' +
+              '<div>Horário: <strong>' + formatDisplayDt(slotIso || '') + '</strong></div>' +
+              '<div>Status: <strong>' + (rr.status || '') + '</strong></div>' +
+              '<div>Entrada: <strong>' + (rr.data_entrada || rr.dataentrada || '') + '</strong></div>' +
+              '<div>Saída: <strong>' + (rr.data_saida || rr.datasaida || '') + '</strong></div>' +
+              '<div class="mt-2">Observação:</div><div class="small text-muted" style="white-space:pre-wrap">' + (rr.observacao || rr.obs || '') + '</div>' +
+              '</div>';
+            const detList = document.getElementById('detList');
+            if (detList) detList.innerHTML = bloco;
+          } catch(_) {}
+          const detailsModalEl = document.getElementById('reservationDetailsModal');
+          if (detailsModalEl) {
+            try { new bootstrap.Modal(detailsModalEl).show(); } catch(_) {}
+          }
+        } catch(_) {}
+      }
+
+      document.addEventListener('click', function(e){
+        try {
+          const block = e.target.closest && e.target.closest('.reservation-block');
+          if (block) { showReservationDetailsFromBlock(block); return; }
+          const td = e.target.closest && e.target.closest('td[data-dt]');
+          if (!td) return;
+          if (!td.classList.contains('has-reservations')) return;
+          showReservationDetailsFromTd(td);
+        } catch(_) {}
+      });
+      document.addEventListener('mousedown', function(e){
+        try {
+          const block = e.target.closest && e.target.closest('.reservation-block');
+          if (block) { showReservationDetailsFromBlock(block); return; }
+          const td = e.target.closest && e.target.closest('td[data-dt]');
+          if (!td) return;
+          if (!td.classList.contains('has-reservations')) return;
+          showReservationDetailsFromTd(td);
+        } catch(_) {}
+      });
+
+      document.addEventListener('mouseover', function(e){
+        try {
+          const block = e.target.closest && e.target.closest('.reservation-block');
+          if (!block) return;
+          block.classList.add('hovered');
+        } catch(_) {}
+      });
+      document.addEventListener('mouseout', function(e){
+        try {
+          const block = e.target.closest && e.target.closest('.reservation-block');
+          if (!block) return;
+          block.classList.remove('hovered');
+        } catch(_) {}
+      });
+
+      document.addEventListener('mouseover', function(e){
+        try {
+          const td = e.target.closest && e.target.closest('td[data-dt]');
+          if (!td) return;
+          if (!td.classList.contains('has-reservations')) return;
+          td.classList.add('hovered');
+        } catch(_) {}
+      });
+      document.addEventListener('mouseout', function(e){
+        try {
+          const td = e.target.closest && e.target.closest('td[data-dt]');
+          if (!td) return;
+          td.classList.remove('hovered');
+        } catch(_) {}
+      });
+    </script>
+  </body>
+</html>

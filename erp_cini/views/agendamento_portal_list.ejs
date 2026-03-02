@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Agendamento Portal - Listagem</title>
+    <%- include('System/headIncludes.ejs') %>
+    <style>
+      .top-actions { display:flex; justify-content:flex-end; align-items:center; margin-bottom:12px; }
+      .custom-table td, .custom-table th { font-size:13px; }
+      .dataTables_wrapper .dt-length { margin-right: 8px; }
+      .dataTables_wrapper .dataTables_filter { margin: 0; }
+      .dataTables_wrapper .dataTables_filter label { display:flex; align-items:center; gap:8px; margin:0; }
+      .dataTables_wrapper .dt-buttons { display:flex; align-items:center; }
+      .dataTables_wrapper .dt-buttons .dt-button, .dataTables_wrapper .dt-buttons .btn { margin-left:16px; margin-top:6px; }
+      .status-concluido { background: #d4edda !important; color: #155724 !important; font-weight: bold; }
+      .status-pendente { background: #fff3cd !important; color: #856404 !important; font-weight: bold; }
+      .actions-col, td.actions-col { max-width: none !important; white-space: nowrap !important; overflow: visible !important; text-overflow: clip !important; }
+    </style>
+  </head>
+  <body>
+    <div class="layout-container">
+      <%- include('partials/sidebar') %>
+      <div class="main-content">
+        <div class="topbar">
+          <div class="topbar-left">
+              <div class="page-info">
+              <h1>Agendamento Portal</h1>
+              <p>Registros em AGENDAMENTO_PORTAL</p>
+            </div>
+          </div>
+          <div class="topbar-right">
+            <%- include('partials/userMenu') %>
+          </div>
+        </div>
+
+        <div class="content p-3">
+          <div class="card">
+            <div class="card-body">
+              <table id="dataTable" class="table table-bordered custom-table" style="width:100%">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Tipo</th>
+                    <th>Data / Hora</th>
+                    <th>Assunto</th>
+                    <th>Telefone</th>
+                    <th>CPF/CNPJ</th>
+                    <th>Responsável</th>
+                    <th>Observações</th>
+                    <th>Status</th>
+                    <th>Dt Criação</th>
+                    <th>Criado Por</th>
+                    <th>Nome</th>
+                    <th>Concluído Por</th>
+                    <th>Dt Chegada</th>
+                    <th class="actions-col">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% if (agendamentos && agendamentos.length) { agendamentos.forEach(function(r){ %>
+                    <tr>
+                      <td class="cell-tooltip"><%= r.id %></td>
+                      <td class="cell-tooltip"><%= r.tipo %></td>
+                      <td class="cell-tooltip datetime-cell" title="<%= r.data_hora %>" data-dt="<%= r.data_hora %>"><%= r.data_hora %></td>
+                      <td class="cell-tooltip"><%= r.assunto %></td>
+                      <td class="cell-tooltip"><%= r.telefone %></td>
+                      <td class="cell-tooltip"><%= r.cpf_cnpj %></td>
+                      <td class="cell-tooltip"><%= r.responsavel %></td>
+                      <td class="cell-tooltip"><%= r.observacoes %></td>
+                      <td class="cell-tooltip status-cell <%= (r.status && String(r.status).toLowerCase().indexOf('concl')!==-1) ? 'status-concluido' : 'status-pendente' %>"><%= r.status %></td>
+                      <td class="cell-tooltip datetime-cell" title="<%= r.dt_criacao %>" data-dt="<%= r.dt_criacao %>"><%= r.dt_criacao %></td>
+                      <td class="cell-tooltip"><%= r.criado_por %></td>
+                      <td class="cell-tooltip"><%= r.nome %></td>
+                      <td class="cell-tooltip"><%= r.concluido_por %></td>
+                      <td class="cell-tooltip datetime-cell" title="<%= r.dt_cheg %>" data-dt="<%= r.dt_cheg %>"><%= r.dt_cheg %></td>
+                      <td class="actions-col text-center">
+                        <button type="button" class="btn btn-danger btn-icon-sm btn-excluir-agendamento-portal" data-id="<%= r.id %>" title="Excluir">
+                          <i class="fas fa-trash"></i>
+                        </button>
+                      </td>
+                    </tr>
+                  <% }); } %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <%- include('System/bodyIncludes.ejs') %>
+
+    <div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header"><h5 class="modal-title">Confirmar Exclusão</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+          <div class="modal-body"><p id="confirmDeleteMessage">Tem certeza que deseja excluir este registro?</p></div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="button" id="confirmDeleteBtn" class="btn btn-danger">Excluir</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      window.agendamentosData = <%- JSON.stringify(agendamentos || []) %>;
+      document.addEventListener('DOMContentLoaded', function(){
+        try { if (window.$ && $.fn && $.fn.DataTable) { var dt = $('#dataTable').DataTable({ autoWidth:false, dom: "<'top'<'d-flex justify-content-between'<'dt-length'l><'d-flex justify-content-end align-items-center'<'dt-search'f><'dt-buttons ms-2'B>>>>rtip", buttons:[{ extend:'excelHtml5', text:'<i class="fas fa-file-excel"></i> Excel', className:'btn btn-success btn-sm' }], lengthMenu:[[5,10,25,-1],[5,10,25,'Todos']], pageLength:10 }); try{ dt.on('draw', function(){ formatDatetimeCells('.datetime-cell'); }); }catch(_){ } }
+        } catch(e){console.error(e);} 
+        var deleteTargetId = null; var deleteModal = null;
+        $(document).on('click', '.btn-excluir-agendamento-portal', function(){ deleteTargetId = $(this).data('id'); $('#confirmDeleteMessage').text('Confirma exclusão do registro ID ' + deleteTargetId + '?'); var el = document.getElementById('confirmDeleteModal'); try { deleteModal = new bootstrap.Modal(el); deleteModal.show(); } catch(e){ $('#confirmDeleteModal').modal('show'); } });
+        $('#confirmDeleteBtn').on('click', function(){ var id = deleteTargetId; if (!id) return; var $btn = $(this); $btn.prop('disabled', true).text('Excluindo...'); fetch('/agendamento-portal/delete', { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: id }) }).then(function(r){ return r.json(); }).then(function(resp){ if (resp && resp.success) { try { if (deleteModal) deleteModal.hide(); else $('#confirmDeleteModal').modal('hide'); } catch(_){ $('#confirmDeleteModal').modal('hide'); } location.reload(); } else { alert('Erro ao excluir'); } }).catch(function(err){ console.error(err); alert('Erro ao excluir'); }).finally(function(){ $btn.prop('disabled', false).text('Excluir'); }); });
+        function formatDatetimeCells(selector){
+          selector = selector || '.datetime-cell';
+          document.querySelectorAll(selector).forEach(function(td){
+            try{
+              var raw = td.getAttribute('data-dt') || td.getAttribute('title') || td.textContent || '';
+              var formatted = raw;
+              if (typeof raw === 'string'){
+                var m = raw.match(/(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
+                if (m) formatted = m[3] + '/' + m[2] + '/' + m[1] + ' ' + m[4] + ':' + m[5];
+                else { var d = new Date(raw); if (!isNaN(d)) formatted = d.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }); }
+              }
+              td.textContent = formatted;
+              td.setAttribute('title', formatted);
+            }catch(_){ }
+          });
+        }
+        try{ formatDatetimeCells('.datetime-cell'); }catch(_){ }
+      });
+    </script>
+  </body>
+</html>

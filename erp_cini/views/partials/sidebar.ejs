@@ -9,15 +9,15 @@
   <nav class="sidebar-nav">
     <div class="nav-section">
       <span class="nav-label nav-text">Principal</span>
-      <a class="nav-item <%= currentPath === '/' || currentPath === '/dashboard' ? 'active' : '' %>" href="/dashboard"><i class="bi bi-speedometer2"></i> <span class="nav-text">Visitas Portaria</span></a>
-      <a class="nav-item <%= currentPath && currentPath.startsWith('/retiras') ? 'active' : '' %>" href="/retiras"><i class="bi bi-list-check"></i> <span class="nav-text">Retiras Portaria</span></a>
+      <a class="nav-item <%= currentPath === '/' || currentPath === '/dashboard' ? 'active' : '' %>" href="/dashboard"><i class="bi bi-people"></i> <span class="nav-text">Visitas Portaria</span></a>
+      <a class="nav-item <%= currentPath && currentPath.startsWith('/retiras') ? 'active' : '' %>" href="/retiras"><i class="bi bi-calendar-check"></i> <span class="nav-text">Retiras Portaria</span></a>
       <a class="nav-item <%= currentPath && currentPath.startsWith('/cargas-portaria') ? 'active' : '' %>" href="/cargas-portaria"><i class="bi bi-truck"></i> <span class="nav-text">Cargas Portaria</span></a>
     </div>
 
     <hr class="sidebar-divider">
     <div class="nav-section">
       <span class="nav-label nav-text">Cadastros</span>
-      <a class="nav-item <%= currentPath && currentPath.startsWith('/agendamentos') ? 'active' : '' %>" href="/agendamentos"><i class="bi bi-pencil"></i> <span class="nav-text">Agendamentos</span></a>
+      <a class="nav-item <%= currentPath && currentPath.startsWith('/agendamentos') ? 'active' : '' %>" href="/agendamentos"><i class="bi bi-calendar-plus"></i> <span class="nav-text">Agendamentos</span></a>
     </div>
 
     <hr class="sidebar-divider">
@@ -29,13 +29,9 @@
     <hr class="sidebar-divider">
     <div class="nav-section">
       <span class="nav-label nav-text">Listagens</span>
-      <a class="nav-item <%= currentPath && currentPath.startsWith('/listagem/horarios-agendamento') ? 'active' : '' %>" href="/listagem/horarios-agendamento"><i class="bi bi-calendar-check"></i> <span class="nav-text">Horários Agendamento</span></a>
-      <a class="nav-item <%= currentPath && currentPath.startsWith('/listagem/cargas-portaria') ? 'active' : '' %>" href="/listagem/cargas-portaria"><i class="bi bi-list"></i> <span class="nav-text">Cargas Portaria</span></a>
+      <a class="nav-item <%= currentPath && currentPath.startsWith('/listagem/agendamento-portal') ? 'active' : '' %>" href="/listagem/agendamento-portal"><i class="bi bi-list-ul"></i> <span class="nav-text">Listagem Visitas</span></a>
+      <a class="nav-item <%= currentPath && currentPath.startsWith('/listagem/horarios-agendamento') ? 'active' : '' %>" href="/listagem/horarios-agendamento"><i class="bi bi-calendar-check"></i> <span class="nav-text">Listagem Retiras</span></a>
+      <a class="nav-item <%= currentPath && currentPath.startsWith('/listagem/cargas-portaria') ? 'active' : '' %>" href="/listagem/cargas-portaria"><i class="bi bi-truck"></i> <span class="nav-text">Listagem Cargas</span></a>
       <a class="nav-item <%= currentPath && currentPath.startsWith('/conferencia') ? 'active' : '' %>" href="/conferencia"><i class="bi bi-people"></i> <span class="nav-text">Conferência</span></a>
     </div>
-
-</nav>
-  <div class="sidebar-footer">
-    <a class="nav-item" href="/logout"><i class="bi bi-door-open"></i> <span class="nav-text">Sair</span></a>
-  </div>
 </aside>

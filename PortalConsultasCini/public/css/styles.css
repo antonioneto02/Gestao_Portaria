@@ -1588,6 +1588,42 @@ select.form-control {
     font-size: 0.8rem;
   }
   
+/* Garantir que o botão de fechar do modal sempre mostre um '×' (caso o markup não tenha o span ou as fontes não carreguem) */
+.modal-header .close::after,
+.modal .close::after {
+  content: "\00d7";
+  font-size: 1.35rem;
+  line-height: 1;
+  display: inline-block;
+  color: currentColor;
+  vertical-align: middle;
+}
+.modal-header .close::before,
+.modal .close::before {
+  content: none !important;
+}
+
+/* Forçar X também para botões Bootstrap 5 `.btn-close` quando usados dentro de modais */
+.modal .btn-close,
+.modal-header .btn-close {
+  background-image: none !important;
+  width: auto !important;
+  height: auto !important;
+  padding: 0.25rem 0.5rem !important;
+  border: none !important;
+}
+.modal .btn-close::after,
+.modal-header .btn-close::after {
+  content: "\00d7";
+  font-size: 1.35rem;
+  line-height: 1;
+  display: inline-block;
+  color: currentColor;
+  vertical-align: middle;
+}
+.modal .btn-close::before,
+.modal-header .btn-close::before { content: none !important; }
+
   #logoutModal .modal-footer {
     padding: 0.875rem 1rem;
     flex-direction: row;

@@ -233,10 +233,19 @@ app.get('/retiras', ensureAuth, async (req, res) => {
   try {
     let retirasHoje = [];
     try {
-      retirasHoje = await horariosRetiraModel.getAllReservations();
-      if (Array.isArray(retirasHoje)) {
-        retirasHoje = retirasHoje.filter(r => { try { return !((r.status||'').toString().toLowerCase().indexOf('concl') !== -1); } catch(e) { return true; } });
-      }
+        retirasHoje = await horariosRetiraModel.getAllReservations();
+        if (Array.isArray(retirasHoje)) {
+          const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+          const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
+          retirasHoje = retirasHoje.filter(r => {
+            try {
+              if ((r.status||'').toString().toLowerCase().indexOf('concl') !== -1) return false;
+              const dt = r.data ? new Date(r.data) : null;
+              if (!dt || isNaN(dt.getTime())) return false;
+              return dt >= todayStart && dt <= todayEnd;
+            } catch(e) { return false; }
+          });
+        }
     } catch(_) { retirasHoje = []; }
     return res.render('Retiras/retiras', { retirasHoje, user: { nome: req.session.user_name || req.session.username || req.cookies && req.cookies.username || 'Usuário', email: req.session.user_email || req.cookies && req.cookies.user_email || '', id: req.session.user_id || req.session.userID || null } });
   } catch (e) {
@@ -250,7 +259,16 @@ app.get('/retiras/data', ensureAuth, async (req, res) => {
     let reservations = await horariosRetiraModel.getAllReservations();
     try {
       if (Array.isArray(reservations)) {
-        reservations = reservations.filter(r => { try { return !((r.status||'').toString().toLowerCase().indexOf('concl') !== -1); } catch(e) { return true; } });
+        const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+        const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
+        reservations = reservations.filter(r => {
+          try {
+            if ((r.status||'').toString().toLowerCase().indexOf('concl') !== -1) return false;
+            const dt = r.data ? new Date(r.data) : null;
+            if (!dt || isNaN(dt.getTime())) return false;
+            return dt >= todayStart && dt <= todayEnd;
+          } catch(e) { return false; }
+        });
       }
     } catch(e) {}
     return res.json({ success: true, data: reservations });
@@ -651,6 +669,38 @@ app.get('/listagem/horarios-agendamento', ensureAuth, async (req, res) => {
   }
 });
 
+app.get('/listagem/agendamento-portal', ensureAuth, async (req, res) => {
+  try {
+    const pool = await new sql.ConnectionPool(dbDw).connect();
+    try {
+      const q = `SELECT [id]
+      ,[tipo]
+      ,[data_hora]
+      ,[assunto]
+      ,[telefone]
+      ,[cpf_cnpj]
+      ,[responsavel]
+      ,[observacoes]
+      ,[status]
+      ,[dt_criacao]
+      ,[criado_por]
+      ,[nome]
+      ,[concluido_por]
+      ,[dt_cheg]
+  FROM [dw].[dbo].[AGENDAMENTO_PORTAL]
+  ORDER BY dt_criacao DESC`;
+      const r = await pool.request().query(q);
+      const rows = (r && r.recordset) ? r.recordset : [];
+      return res.render('agendamento_portal_list', { agendamentos: rows, user: { nome: req.session.user_name || req.session.username || req.cookies && req.cookies.username || 'Usuário', email: req.session.user_email || req.cookies && req.cookies.user_email || '', id: req.session.user_id || req.session.userID || null } });
+    } finally {
+      try { await pool.close(); } catch(_){ }
+    }
+  } catch (err) {
+    console.error('Erro ao buscar AGENDAMENTO_PORTAL:', err && err.message ? err.message : err);
+    return res.render('agendamento_portal_list', { agendamentos: [], user: { nome: req.session.user_name || req.session.username || req.cookies && req.cookies.username || 'Usuário', email: req.session.user_email || req.cookies && req.cookies.user_email || '', id: req.session.user_id || req.session.userID || null } });
+  }
+});
+
 app.post('/horarios-agendamento/concluir', ensureAuth, express.json(), async (req, res) => {
   try {
     const id = req.body && req.body.id ? parseInt(req.body.id, 10) : null;
@@ -675,6 +725,19 @@ app.post('/horarios-agendamento/delete', ensureAuth, express.json(), async (req,
       return res.json({ success: true });
     } finally { try { await pool.close(); } catch(_){ } }
   } catch (err) { console.error('Erro ao excluir agendamento:', err && err.message ? err.message : err); return res.status(500).json({ success: false }); }
+});
+
+app.post('/agendamento-portal/delete', ensureAuth, express.json(), async (req, res) => {
+  try {
+    const id = req.body && req.body.id ? parseInt(req.body.id, 10) : null;
+    if (!id) return res.status(400).json({ success: false, message: 'ID inválido' });
+    const pool = await new sql.ConnectionPool(dbDw).connect();
+    try {
+      const q = 'DELETE FROM [dw].[dbo].[AGENDAMENTO_PORTAL] WHERE id = @id';
+      await pool.request().input('id', sql.Int, id).query(q);
+      return res.json({ success: true });
+    } finally { try { await pool.close(); } catch(_){ } }
+  } catch (err) { console.error('Erro ao excluir agendamento_portal:', err && err.message ? err.message : err); return res.status(500).json({ success: false }); }
 });
 
 app.post('/cargas-portaria/concluir', ensureAuth, express.json(), async (req, res) => {

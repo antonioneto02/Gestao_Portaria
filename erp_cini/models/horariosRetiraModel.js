@@ -119,7 +119,7 @@ async function createReservation({ pedido, dt_horario, usuario, cliente_nome, cl
           const poolCentral = await new sql.ConnectionPool(dbCentral).connect();
           try {
             const reqCentral = poolCentral.request();
-                const assunto = `Novo agendamento - ${(categoria || '').toString().toUpperCase()} (${String(cliente_cod || '').trim()})`;
+                const assunto = `Novo agendamento - ${(categoria || '').toString().toUpperCase()} (${String(pedido || '').trim()})`;
             let dtFormatted = '';
             let cliente_fantasia = null;
             try {

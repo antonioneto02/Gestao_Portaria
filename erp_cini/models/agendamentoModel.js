@@ -134,6 +134,7 @@ async function insert(payload) {
       } catch (e) {
         console.error('Erro ao inserir visitante:', e && e.message ? e.message : e);
       }
+      return newId;
     } finally {
       try { await pool.close(); } catch(_){}
     }

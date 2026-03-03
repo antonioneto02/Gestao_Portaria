@@ -297,6 +297,7 @@
                 }
                 td.textContent = formatted;
                 td.setAttribute('title', formatted);
+                if (typeof raw === 'string' && raw.length) td.setAttribute('data-order', raw);
               }catch(_){ }
             });
           }
@@ -331,80 +332,120 @@
                 paginate: { first: "Primeiro", last: "Último", next: "Próximo", previous: "Anterior" }
               }
             });
-            try{ if (dt && dt.on) dt.on('draw', function(){ formatDatetimeCells('.datetime-cell'); }); }catch(_){ }
-            function createSearchableDropdown(inputId, selectId, columnIndex, tableSelector) {
-              try{
-                var $input = $('#' + inputId);
-                var $select = $('#' + selectId);
-                console.log('createSearchableDropdown init:', inputId, 'inputFound=', $input.length, 'selectFound=', $select.length, 'col=', columnIndex, 'tableSel=', tableSelector);
-                if ($input.length === 0) return;
-                $('.dropdown-menu.searchable-column[data-for="' + inputId + '"]').remove();
-                var $appendTarget = null;
-                var $columnFilters = $input.closest('.column-filters');
-                if ($columnFilters && $columnFilters.length) {
-                  $appendTarget = $columnFilters;
-                  try{ $appendTarget.css('position','relative'); }catch(e){}
-                } else {
-                  $appendTarget = $('body');
+            window.retirasDataTable = dt;
+            try{ if (dt && dt.on) dt.on('draw', function(){ formatDatetimeCells('.datetime-cell'); updateIndicators(dt); }); }catch(_){ }
+            try{ dt.on('search.dt', function(){ updateIndicators(dt); }); }catch(_){ }
+            try{ dt.on('length.dt', function(){ updateIndicators(dt); }); }catch(_){ }
+            
+            function createColumnFilterWithDropdown(tableSelector, columnName, columnIndex) {
+              try {
+                var $table = $(tableSelector);
+                if (!$table || !$table.length) return;
+                var $container = $table.prev('.column-filters');
+                if (!$container.length) {
+                  $container = $('<div class="column-filters mb-2 d-flex gap-2 flex-nowrap" style="overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;"></div>');
+                  $table.before($container);
                 }
-                var $dropdown = $('<div class="dropdown-menu searchable-column" data-for="' + inputId + '" style="position:absolute; z-index:3000; display:none; background:white; border:1px solid #ccc; max-height:240px; overflow-y:auto; box-sizing:border-box;"></div>');
-                $appendTarget.append($dropdown);
-                if ($select && $select.length) {
-                  $select.find('option').each(function(){ if ($(this).val() !== '') { var $item = $('<div class="dropdown-item"></div>'); $item.text($(this).text()); $item.data('value', $(this).val()); $dropdown.append($item); } });
+                var safeId = ('colfilter_' + columnName.replace(/[^a-z0-9]/gi,'_') + '_' + columnIndex);
+                var existingInput = $container.find('#' + safeId);
+                if (!existingInput.length) {
+                  var $input = $('<input type="search" class="form-control form-control-sm" placeholder="' + columnName + '" />').attr('id', safeId);
+                  $input.css({ 'min-width': '200px', 'flex': '0 0 auto', 'position': 'relative' });
+                  $container.append($input);
+                  existingInput = $input;
                 }
-                if ($dropdown.children().length === 0 && typeof columnIndex === 'number' && tableSelector) {
-                  try{
-                    var tbl = $(tableSelector).DataTable();
-                    var vals = tbl.column(columnIndex).data().toArray().map(function(v){ try { return $('<div>').html(v).text().toString().trim(); } catch(e){ return (v||'').toString().trim(); } }).filter(function(v){ return v !== ''; });
-                    var uniq = Array.from(new Set(vals)).sort();
-                    uniq.forEach(function(u){ var $it = $('<div class="dropdown-item"></div>'); $it.text(u); $it.data('value', u); $dropdown.append($it); });
-                  }catch(e){}
-                }
-                function positionDropdown(){
-                  try{
-                    var w = Math.max($input.outerWidth(), 120);
-                    if ($appendTarget && $appendTarget.is('body')){
-                      var rect = $input[0].getBoundingClientRect();
-                      var left = rect.left + window.pageXOffset;
-                      var top = rect.bottom + window.pageYOffset + 4;
-                      $dropdown.css({ left: left + 'px', top: top + 'px', width: w + 'px' });
-                    } else {
-                      var inpOff = $input.offset();
-                      var targetOff = $appendTarget.offset() || { left: 0, top: 0 };
-                      var left = inpOff.left - targetOff.left;
-                      var top = (inpOff.top - targetOff.top) + $input.outerHeight() + 4;
-                      $dropdown.css({ left: left + 'px', top: top + 'px', width: w + 'px' });
-                    }
-                  }catch(e){}
-                }
-                $input.on('focus.createSearch', function(){ positionDropdown(); console.log('createSearchableDropdown show:', inputId); $dropdown.show(); });
-                $input.on('click.createSearch', function(){ positionDropdown(); $dropdown.show(); });
-                $input.on('blur.createSearch', function(){ setTimeout(function(){ console.log('createSearchableDropdown hide:', inputId); $dropdown.hide(); }, 200); });
-                $input.on('input.createSearch', function(){ var term = ($input.val()||'').toLowerCase(); $dropdown.find('.dropdown-item').each(function(){ var t = $(this).text().toLowerCase(); $(this).toggle(t.indexOf(term) !== -1); }); positionDropdown(); $dropdown.show(); });
-                $dropdown.on('click.createSearch touchstart.createSearch', '.dropdown-item', function(e){
-                  var v = $(this).data('value');
-                  var text = $(this).text() || '';
-                  $input.val(text);
-                  $dropdown.hide();
-                  try{ if (tableSelector && typeof columnIndex === 'number') { var tbl = $(tableSelector).DataTable(); if (tbl) tbl.column(columnIndex).search(v || '').draw(); } }catch(e){}
+                var table = $table.DataTable ? $table.DataTable() : null;
+                if (!table) return;
+                var uniqueValues = [];
+                try {
+                  var vals = table.column(columnIndex).data().toArray();
+                  vals.forEach(function(v) {
+                    try {
+                      var text = $('<div>').html(v).text().toString().trim();
+                      if (text && uniqueValues.indexOf(text) === -1) { uniqueValues.push(text); }
+                    } catch(_) {}
+                  });
+                  uniqueValues.sort();
+                } catch(e) { return; }
+                var dropdownId = safeId + '_dropdown';
+                var existingDropdown = $container.find('#' + dropdownId);
+                if (existingDropdown.length) existingDropdown.remove();
+                var $dropdown = $('<div id="' + dropdownId + '" class="dropdown-column" style="position:fixed; width:200px; background:white; border:1px solid #ccc; border-radius:4px; max-height:240px; overflow-y:auto; z-index:9999; box-shadow:0 2px 8px rgba(0,0,0,0.15); display:none;">');
+                var $clearItem = $('<div style="padding:8px 12px; cursor:pointer; background:#f8f9fa; border-bottom:1px solid #eee; color:#666; font-size:12px; font-weight:500;">— Limpar filtro —</div>');
+                $clearItem.on('click', function(){ existingInput.val('').trigger('input'); $dropdown.hide(); });
+                $dropdown.append($clearItem);
+                uniqueValues.forEach(function(val) {
+                  var $item = $('<div style="padding:8px 12px; cursor:pointer; border-bottom:1px solid #eee; font-size:13px;">').text(val);
+                  $item.on('mouseenter', function(){ $(this).css('background', '#f0f0f0'); });
+                  $item.on('mouseleave', function(){ $(this).css('background', 'white'); });
+                  $item.on('click', function(){ existingInput.val(val).trigger('input'); $dropdown.hide(); });
+                  $dropdown.append($item);
                 });
-                $input.on('keypress.createSearch', function(e){ if (e.which === 13) { var searchTerm = $input.val(); try{ if (tableSelector && typeof columnIndex === 'number') { var tbl = $(tableSelector).DataTable(); if (tbl) tbl.column(columnIndex).search(searchTerm).draw(); } }catch(e){} $dropdown.hide(); } });
-                var repositionHandler = function(){ if ($dropdown.is(':visible')) positionDropdown(); };
-                $(window).on('scroll.createSearch resize.createSearch', repositionHandler);
-                var mo = new MutationObserver(function(){ if (!$.contains(document, $input[0])) { $dropdown.remove(); $(window).off('scroll.createSearch resize.createSearch', repositionHandler); mo.disconnect(); } });
-                mo.observe(document.body, { childList: true, subtree: true });
-              }catch(e){}
+                $('body').append($dropdown);
+                function positionDropdown() {
+                  try {
+                    var rect = existingInput[0].getBoundingClientRect();
+                    $dropdown.css({
+                      top: (rect.bottom + 2) + 'px',
+                      left: rect.left + 'px',
+                      width: rect.width + 'px'
+                    });
+                  } catch(e) {}
+                }
+                var scrollTimeout = null;
+                existingInput.on('focus', function(){ positionDropdown(); $dropdown.show(); });
+                existingInput.on('blur', function(){ setTimeout(function(){ $dropdown.hide(); }, 150); });
+                existingInput.on('click', function(){ positionDropdown(); $dropdown.show(); });
+                $(window).on('scroll', function(){ 
+                  $dropdown.hide();
+                  clearTimeout(scrollTimeout);
+                  scrollTimeout = setTimeout(function(){
+                    if (existingInput.is(':focus')) { positionDropdown(); $dropdown.show(); }
+                  }, 150);
+                });
+                existingInput.on('input', function(){
+                  var searchTerm = $(this).val().toLowerCase();
+                  $dropdown.find('div').each(function(idx){
+                    if (idx === 0) return;
+                    var text = $(this).text().toLowerCase();
+                    $(this).toggle(text.indexOf(searchTerm) !== -1);
+                  });
+                  if (searchTerm) { positionDropdown(); $dropdown.show(); }
+                  if (table && table.column) { table.column(columnIndex).search($(this).val()).draw(); }
+                });
+              } catch(e) {}
             }
+            
+            function updateIndicators(dt) {
+              try {
+                const filteredData = dt.rows({ search: 'applied' }).data().toArray();
+                const categoriaSet = new Set(); const clienteSet = new Set(); const usersSet = new Set();
+                let totalRecords = 0;
+                filteredData.forEach(function(row) {
+                  try {
+                    if (row[1] && String(row[1]).trim()) clienteSet.add(String(row[1]).trim()); // Pedido
+                    if (row[3] && String(row[3]).trim()) clienteSet.add(String(row[3]).trim()); // Nome Cliente
+                    if (row[8] && String(row[8]).trim()) categoriaSet.add(String(row[8]).trim()); // Status
+                    if (row[7] && String(row[7]).trim()) usersSet.add(String(row[7]).trim()); // Criado Por
+                    totalRecords++;
+                  } catch(_) {}
+                });
+                // Por enquanto apenas mostrar total. Adapte conforme necessário.
+              } catch(e) {}
+            }
+            
             try{ formatDatetimeCells('.datetime-cell'); }catch(_){ }
               try {
-                createColumnFilter('#retirasHojeTable','Pedido');
-                createColumnFilter('#retirasHojeTable','Nome Cliente');
-                createColumnFilter('#retirasHojeTable','Status');
+                createColumnFilterWithDropdown('#retirasHojeTable','Pedido', 1);
+                createColumnFilterWithDropdown('#retirasHojeTable','Nome Cliente', 3);
+                createColumnFilterWithDropdown('#retirasHojeTable','Status', 8);
                 try{
                   var $cf = $('#retirasHojeTable').prev('.column-filters');
                   if ($cf && $cf.length) {
                     $cf.css({ 'overflow-x': 'hidden', 'flex-wrap': 'nowrap', 'gap': '6px' });
                     $cf.find('input').css({ 'min-width': '120px', 'width': 'auto', 'flex': '0 0 auto' });
+                    $cf.find('input').on('change keyup', function(){ if (window.retirasDataTable) { updateIndicators(window.retirasDataTable); } });
+                    $(document).on('keyup', '.dataTables_filter input', function(){ if (window.retirasDataTable) { updateIndicators(window.retirasDataTable); } });
                   }
                 }catch(_){ }
               } catch(_){ }
@@ -420,36 +461,44 @@
         const btn = e.target.closest('.editarRetira'); if (!btn) return;
         const id = btn.getAttribute('data-id'); if (!id) return;
         document.getElementById('modalRetiraId').value = id;
-        const row = btn.closest('tr');
-        let rawEntrada = null; let rawSaida = null;
-        try {
-          if (row) {
-            const tdEntrada = row.querySelector('td[data-raw]');
-            const allWithRaw = row.querySelectorAll('td[data-raw]');
-            if (allWithRaw && allWithRaw.length) {
-              rawEntrada = allWithRaw[0] ? allWithRaw[0].getAttribute('data-raw') : null;
-              rawSaida = allWithRaw[1] ? allWithRaw[1].getAttribute('data-raw') : null;
-            }
+        
+        // Buscar dados atualizados do servidor em vez de usar dados da DOM
+        fetch('/retiras/data').then(r => r.json()).then(resp => {
+          if (!resp || !resp.success || !resp.data) {
+            alert('Erro ao carregar dados');
+            return;
           }
-        } catch(_){}
-        function toLocalInput(val){
-          try {
-            if (!val) return '';
-            let d = null;
-            if (typeof val === 'string' && val.indexOf('T') !== -1) d = new Date(val);
-            else d = new Date(String(val).replace(' ', 'T'));
-            if (isNaN(d)) return '';
-            const yyyy = d.getFullYear();
-            const mm = String(d.getMonth()+1).padStart(2,'0');
-            const dd = String(d.getDate()).padStart(2,'0');
-            const hh = String(d.getHours()).padStart(2,'0');
-            const mi = String(d.getMinutes()).padStart(2,'0');
-            return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
-          } catch(_) { return ''; }
-        }
-        document.getElementById('modalDataEntrada').value = toLocalInput(rawEntrada);
-        document.getElementById('modalDataSaida').value = toLocalInput(rawSaida);
-        if (bsModal) bsModal.show();
+          
+          // Encontrar o registro específico
+          const registro = resp.data.find(r => String(r.id) === String(id));
+          if (!registro) {
+            alert('Registro não encontrado');
+            return;
+          }
+          
+          function toLocalInput(val){
+            try {
+              if (!val) return '';
+              let d = null;
+              if (typeof val === 'string' && val.indexOf('T') !== -1) d = new Date(val);
+              else d = new Date(String(val).replace(' ', 'T'));
+              if (isNaN(d)) return '';
+              const yyyy = d.getFullYear();
+              const mm = String(d.getMonth()+1).padStart(2,'0');
+              const dd = String(d.getDate()).padStart(2,'0');
+              const hh = String(d.getHours()).padStart(2,'0');
+              const mi = String(d.getMinutes()).padStart(2,'0');
+              return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+            } catch(_) { return ''; }
+          }
+          
+          document.getElementById('modalDataEntrada').value = toLocalInput(registro.data_entrada);
+          document.getElementById('modalDataSaida').value = toLocalInput(registro.data_saida);
+          if (bsModal) bsModal.show();
+        }).catch(err => {
+          console.error(err);
+          alert('Erro ao carregar dados');
+        });
       });
 
       document.getElementById('modalSaveRetira').addEventListener('click', function(){

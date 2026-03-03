@@ -275,11 +275,9 @@
         $('#cadastroPlaca').on('input', function(){ var q = $(this).val(); var maybe = findMatchesByPlaca(q); if (maybe && typeof maybe.then === 'function') { maybe.then(function(matches){ renderMatches(matches); if (matches && matches.length) populateFormWith(matches[0]); }); } else { renderMatches(maybe); if (maybe && maybe.length) populateFormWith(maybe[0]); } });
         $('#cadastroCarga').on('input', function(){ var q = $(this).val(); if (!q) return; try { fetch('/cargas-portaria/find?carga=' + encodeURIComponent(q)).then(function(r){ return r.json(); }).then(function(resp){ var matches = (resp && resp.success && Array.isArray(resp.results)) ? resp.results : []; renderMatches(matches); if (matches && matches.length) populateFormWith(matches[0]); }).catch(function(){ /* ignore */ }); } catch(e){} });
         $(document).on('click', '.match-item', function(){ var rec = $(this).data('rec'); populateFormWith(rec); });
-
         $('#cadastroSaveBtn').on('click', function(e){ e.preventDefault(); var payload = { filial: $('#cadastroFilial').val() || null, carga: $('#cadastroCarga').val() || null, dt_entrega: $('#cadastroDtEntrega').val() || null, placa: $('#cadastroPlaca').val() || null, tipo_entrega: $('#cadastroTipoEntrega').val() || null, motorista: $('#cadastroMotorista').val() || null, peso: $('#cadastroPeso').val() || null }; fetch('/cargas-portaria/concluir', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type':'application/json' }, body: JSON.stringify(payload) }).then(function(r){ return r.json(); }).then(function(json){ if (json && json.success) { try { $('#cadastroModal').modal('hide'); } catch(_){} location.reload(); } else { alert('Erro ao salvar: ' + (json && json.message ? json.message : 'erro desconhecido')); } }).catch(function(err){ console.error(err); alert('Erro ao salvar: ' + (err && err.message ? err.message : 'erro desconhecido')); }); });
       })();
     </script>
-
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       try {
@@ -312,46 +310,152 @@
               paginate: { first: "Primeiro", last: "Último", next: "Próximo", previous: "Anterior" }
             }
           });
-          try { dataTable.on('draw', formatDatetimeCells); } catch(_){ }
+          window.cargasPortariaDataTable = dataTable;
+          try { dataTable.on('draw', function(){ formatDatetimeCells(); updateIndicators(dataTable); }); } catch(_){ }
+          try{ dataTable.on('search.dt', function(){ updateIndicators(dataTable); }); }catch(_){ }
+          try{ dataTable.on('length.dt', function(){ updateIndicators(dataTable); }); }catch(_){ }
           try {
-            try { createColumnFilter('#cargasPortariaTable','Carga'); } catch(_){ }
-            try { createColumnFilter('#cargasPortariaTable','Placa'); } catch(_){ }
-            try { createColumnFilter('#cargasPortariaTable','Motorista'); } catch(_){ }
-            try { createColumnFilter('#cargasPortariaTable','Status'); } catch(_){ }
+            try { createColumnFilterWithDropdown('#cargasPortariaTable','Carga', 1); } catch(_){ }
+            try { createColumnFilterWithDropdown('#cargasPortariaTable','Placa', 4); } catch(_){ }
+            try { createColumnFilterWithDropdown('#cargasPortariaTable','Motorista', 6); } catch(_){ }
+            try { createColumnFilterWithDropdown('#cargasPortariaTable','Status', 3); } catch(_){ }
             try{
               var $cf = $('#cargasPortariaTable').prev('.column-filters');
               if ($cf && $cf.length) {
                 $cf.css({ 'overflow-x': 'hidden', 'flex-wrap': 'nowrap', 'gap': '6px' });
                 $cf.find('input').css({ 'min-width': '120px', 'width': 'auto', 'flex': '0 0 auto' });
+                $cf.find('input').on('change keyup', function(){ if (window.cargasPortariaDataTable) { updateIndicators(window.cargasPortariaDataTable); } });
+                $(document).on('keyup', '.dataTables_filter input', function(){ if (window.cargasPortariaDataTable) { updateIndicators(window.cargasPortariaDataTable); } });
               }
             }catch(_){ }
           } catch(_){ }
         }
       } catch(e) { console.error('DataTable init error:', e); }
+      
+      function createColumnFilterWithDropdown(tableSelector, columnName, columnIndex) {
+        try {
+          var $table = $(tableSelector);
+          if (!$table || !$table.length) return;
+          var $container = $table.prev('.column-filters');
+          if (!$container.length) {
+            $container = $('<div class="column-filters mb-2 d-flex gap-2 flex-nowrap" style="overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;"></div>');
+            $table.before($container);
+          }
+          var safeId = ('colfilter_' + columnName.replace(/[^a-z0-9]/gi,'_') + '_' + columnIndex);
+          var existingInput = $container.find('#' + safeId);
+          if (!existingInput.length) {
+            var $input = $('<input type="search" class="form-control form-control-sm" placeholder="' + columnName + '" />').attr('id', safeId);
+            $input.css({ 'min-width': '200px', 'flex': '0 0 auto', 'position': 'relative' });
+            $container.append($input);
+            existingInput = $input;
+          }
+          var table = $table.DataTable ? $table.DataTable() : null;
+          if (!table) return;
+          var uniqueValues = [];
+          try {
+            var vals = table.column(columnIndex).data().toArray();
+            vals.forEach(function(v) {
+              try {
+                var text = $('<div>').html(v).text().toString().trim();
+                if (text && uniqueValues.indexOf(text) === -1) { uniqueValues.push(text); }
+              } catch(_) {}
+            });
+            uniqueValues.sort();
+          } catch(e) { return; }
+          var dropdownId = safeId + '_dropdown';
+          var existingDropdown = $container.find('#' + dropdownId);
+          if (existingDropdown.length) existingDropdown.remove();
+          var $dropdown = $('<div id="' + dropdownId + '" class="dropdown-column" style="position:fixed; width:200px; background:white; border:1px solid #ccc; border-radius:4px; max-height:240px; overflow-y:auto; z-index:9999; box-shadow:0 2px 8px rgba(0,0,0,0.15); display:none;">');
+          var $clearItem = $('<div style="padding:8px 12px; cursor:pointer; background:#f8f9fa; border-bottom:1px solid #eee; color:#666; font-size:12px; font-weight:500;">— Limpar filtro —</div>');
+          $clearItem.on('click', function(){ existingInput.val('').trigger('input'); $dropdown.hide(); });
+          $dropdown.append($clearItem);
+          uniqueValues.forEach(function(val) {
+            var $item = $('<div style="padding:8px 12px; cursor:pointer; border-bottom:1px solid #eee; font-size:13px;">').text(val);
+            $item.on('mouseenter', function(){ $(this).css('background', '#f0f0f0'); });
+            $item.on('mouseleave', function(){ $(this).css('background', 'white'); });
+            $item.on('click', function(){ existingInput.val(val).trigger('input'); $dropdown.hide(); });
+            $dropdown.append($item);
+          });
+          $('body').append($dropdown);
+          function positionDropdown() {
+            try {
+              var rect = existingInput[0].getBoundingClientRect();
+              $dropdown.css({
+                top: (rect.bottom + 2) + 'px',
+                left: rect.left + 'px',
+                width: rect.width + 'px'
+              });
+            } catch(e) {}
+          }
+          var scrollTimeout = null;
+          existingInput.on('focus', function(){ positionDropdown(); $dropdown.show(); });
+          existingInput.on('blur', function(){ setTimeout(function(){ $dropdown.hide(); }, 150); });
+          existingInput.on('click', function(){ positionDropdown(); $dropdown.show(); });
+          $(window).on('scroll', function(){ 
+            $dropdown.hide();
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(function(){
+              if (existingInput.is(':focus')) { positionDropdown(); $dropdown.show(); }
+            }, 150);
+          });
+          existingInput.on('input', function(){
+            var searchTerm = $(this).val().toLowerCase();
+            $dropdown.find('div').each(function(idx){
+              if (idx === 0) return;
+              var text = $(this).text().toLowerCase();
+              $(this).toggle(text.indexOf(searchTerm) !== -1);
+            });
+            if (searchTerm) { positionDropdown(); $dropdown.show(); }
+            if (table && table.column) { table.column(columnIndex).search($(this).val()).draw(); }
+          });
+        } catch(e) {}
+      }
+      
+      function updateIndicators(dt) {
+        try {
+          const filteredData = dt.rows({ search: 'applied' }).data().toArray();
+          const platesSet = new Set(); const driversSet = new Set();
+          let totalRecords = 0;
+          filteredData.forEach(function(row) {
+            try {
+              if (row[4] && String(row[4]).trim()) platesSet.add(String(row[4]).trim()); // Placa
+              if (row[6] && String(row[6]).trim()) driversSet.add(String(row[6]).trim()); // Motorista
+              totalRecords++;
+            } catch(_) {}
+          });
+          document.querySelectorAll('.widgets-grid .widget-content h3')[0].textContent = totalRecords;
+          var platesEl = document.getElementById('platesCountList');
+          var driversEl = document.getElementById('driversCountList');
+          if (platesEl) platesEl.textContent = platesSet.size || 0;
+          if (driversEl) driversEl.textContent = driversSet.size || 0;
+        } catch(e) {}
+      }
+      
       function formatDatetimeCells() {
         document.querySelectorAll('.datetime-cell').forEach(function(td){
           try {
-            var raw = td.getAttribute('title') || td.textContent || '';
+            var raw = td.getAttribute('data-dt') || td.getAttribute('title') || td.textContent || '';
             var formatted = raw;
-            if (typeof raw === 'string') {
-              var dtTimeMatch = raw.match(/(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/);
+            
+            if (typeof raw === 'string' && raw.length > 0) {
+              var dtMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d{1,3}))?/);
               var dtOnlyMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-              if (dtTimeMatch) {
-                formatted = dtTimeMatch[3] + '/' + dtTimeMatch[2] + '/' + dtTimeMatch[1] + ' ' + dtTimeMatch[4] + ':' + dtTimeMatch[5];
+              
+              if (dtMatch) {
+                var y = parseInt(dtMatch[1], 10);
+                var m = parseInt(dtMatch[2], 10);
+                var d = parseInt(dtMatch[3], 10);
+                var hh = dtMatch[4];
+                var mm = dtMatch[5];
+                formatted = String(d).padStart(2, '0') + '/' + String(m).padStart(2, '0') + '/' + y + ' ' + hh + ':' + mm;
               } else if (dtOnlyMatch) {
-                formatted = dtOnlyMatch[3] + '/' + dtOnlyMatch[2] + '/' + dtOnlyMatch[1];
-              } else {
-                var d = new Date(raw);
-                if (!isNaN(d)) formatted = d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                var y = parseInt(dtOnlyMatch[1], 10);
+                var m = parseInt(dtOnlyMatch[2], 10);
+                var d = parseInt(dtOnlyMatch[3], 10);
+                formatted = String(d).padStart(2, '0') + '/' + String(m).padStart(2, '0') + '/' + y;
               }
-            } else if (raw instanceof Date) {
-              var dd = String(raw.getDate()).padStart(2,'0');
-              var mm = String(raw.getMonth()+1).padStart(2,'0');
-              var yyyy = raw.getFullYear();
-              var hh = String(raw.getHours()).padStart(2,'0');
-              var min = String(raw.getMinutes()).padStart(2,'0');
-              formatted = dd + '/' + mm + '/' + yyyy + ' ' + hh + ':' + min;
             }
+            
             td.textContent = formatted;
             td.setAttribute('title', formatted);
           } catch(_){ }

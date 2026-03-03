@@ -79,7 +79,7 @@
                 <tr>
                   <% if (agendamentosHoje && agendamentosHoje.length) {
                        let keys = Object.keys(agendamentosHoje[0]);
-                       keys = keys.filter(k => String(k || '').toLowerCase().replace(/[^a-z0-9]/g,'') !== 'concluidopor');
+                       keys = keys.filter(k => String(k || '').toLowerCase().replace(/[^a-z0-9]/g,'') !== 'concluidopor' && String(k || '').toLowerCase() !== 'enviou');
                        const preferred = ['id','data_hora','dataHora','DataHora','tipo','assunto','nome','responsavel','telefone','cpf_cnpj','status','criado_por','dt_criacao'];
                        const ordered = [];
                        preferred.forEach(k=>{ if (keys.indexOf(k)!==-1 && ordered.indexOf(k)===-1) ordered.push(k); });
@@ -105,7 +105,7 @@
               <tbody>
                 <% if (agendamentosHoje && agendamentosHoje.length) {
                      let keys = Object.keys(agendamentosHoje[0]);
-                     keys = keys.filter(k => String(k || '').toLowerCase().replace(/[^a-z0-9]/g,'') !== 'concluidopor');
+                     keys = keys.filter(k => String(k || '').toLowerCase().replace(/[^a-z0-9]/g,'') !== 'concluidopor' && String(k || '').toLowerCase() !== 'enviou');
                      const preferred = ['id','data_hora','dataHora','DataHora','tipo','assunto','nome','responsavel','telefone','cpf_cnpj','status','criado_por','dt_criacao'];
                      const ordered = [];
                      preferred.forEach(k=>{ if (keys.indexOf(k)!==-1 && ordered.indexOf(k)===-1) ordered.push(k); });
@@ -200,6 +200,7 @@
             }
             td.textContent = formatted;
             td.setAttribute('title', formatted);
+            if (typeof raw === 'string' && raw.length) td.setAttribute('data-order', raw);
           }catch(_){ }
         });
       }
@@ -281,11 +282,94 @@
               paginate: { first: "Primeiro", last: "Último", next: "Próximo", previous: "Anterior" }
             }
           });
+          window.agendamentosHojeDataTable = todayTable;
           try{ if (todayTable && todayTable.on) todayTable.on('draw', function(){ formatDatetimeCells('.datetime-cell-hoje'); }); } catch(_){ }
+          try{ todayTable.on('search.dt', function(){ }); }catch(_){ }
+          try{ todayTable.on('length.dt', function(){ }); }catch(_){ }
+          
+          function createColumnFilterWithDropdown(tableSelector, columnName, columnIndex) {
+            try {
+              var $table = $(tableSelector);
+              if (!$table || !$table.length) return;
+              var $container = $table.prev('.column-filters');
+              if (!$container.length) {
+                $container = $('<div class="column-filters mb-2 d-flex gap-2 flex-nowrap" style="overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;"></div>');
+                $table.before($container);
+              }
+              var safeId = ('colfilter_' + columnName.replace(/[^a-z0-9]/gi,'_') + '_' + columnIndex);
+              var existingInput = $container.find('#' + safeId);
+              if (!existingInput.length) {
+                var $input = $('<input type="search" class="form-control form-control-sm" placeholder="' + columnName + '" />').attr('id', safeId);
+                $input.css({ 'min-width': '200px', 'flex': '0 0 auto', 'position': 'relative' });
+                $container.append($input);
+                existingInput = $input;
+              }
+              var table = $table.DataTable ? $table.DataTable() : null;
+              if (!table) return;
+              var uniqueValues = [];
+              try {
+                var vals = table.column(columnIndex).data().toArray();
+                vals.forEach(function(v) {
+                  try {
+                    var text = $('<div>').html(v).text().toString().trim();
+                    if (text && uniqueValues.indexOf(text) === -1) { uniqueValues.push(text); }
+                  } catch(_) {}
+                });
+                uniqueValues.sort();
+              } catch(e) { return; }
+              var dropdownId = safeId + '_dropdown';
+              var existingDropdown = $container.find('#' + dropdownId);
+              if (existingDropdown.length) existingDropdown.remove();
+              var $dropdown = $('<div id="' + dropdownId + '" class="dropdown-column" style="position:fixed; width:200px; background:white; border:1px solid #ccc; border-radius:4px; max-height:240px; overflow-y:auto; z-index:9999; box-shadow:0 2px 8px rgba(0,0,0,0.15); display:none;">');
+              var $clearItem = $('<div style="padding:8px 12px; cursor:pointer; background:#f8f9fa; border-bottom:1px solid #eee; color:#666; font-size:12px; font-weight:500;">— Limpar filtro —</div>');
+              $clearItem.on('click', function(){ existingInput.val('').trigger('input'); $dropdown.hide(); });
+              $dropdown.append($clearItem);
+              uniqueValues.forEach(function(val) {
+                var $item = $('<div style="padding:8px 12px; cursor:pointer; border-bottom:1px solid #eee; font-size:13px;">').text(val);
+                $item.on('mouseenter', function(){ $(this).css('background', '#f0f0f0'); });
+                $item.on('mouseleave', function(){ $(this).css('background', 'white'); });
+                $item.on('click', function(){ existingInput.val(val).trigger('input'); $dropdown.hide(); });
+                $dropdown.append($item);
+              });
+              $('body').append($dropdown);
+              function positionDropdown() {
+                try {
+                  var rect = existingInput[0].getBoundingClientRect();
+                  $dropdown.css({
+                    top: (rect.bottom + 2) + 'px',
+                    left: rect.left + 'px',
+                    width: rect.width + 'px'
+                  });
+                } catch(e) {}
+              }
+              var scrollTimeout = null;
+              existingInput.on('focus', function(){ positionDropdown(); $dropdown.show(); });
+              existingInput.on('blur', function(){ setTimeout(function(){ $dropdown.hide(); }, 150); });
+              existingInput.on('click', function(){ positionDropdown(); $dropdown.show(); });
+              $(window).on('scroll', function(){ 
+                $dropdown.hide();
+                clearTimeout(scrollTimeout);
+                scrollTimeout = setTimeout(function(){
+                  if (existingInput.is(':focus')) { positionDropdown(); $dropdown.show(); }
+                }, 150);
+              });
+              existingInput.on('input', function(){
+                var searchTerm = $(this).val().toLowerCase();
+                $dropdown.find('div').each(function(idx){
+                  if (idx === 0) return;
+                  var text = $(this).text().toLowerCase();
+                  $(this).toggle(text.indexOf(searchTerm) !== -1);
+                });
+                if (searchTerm) { positionDropdown(); $dropdown.show(); }
+                if (table && table.column) { table.column(columnIndex).search($(this).val()).draw(); }
+              });
+            } catch(e) {}
+          }
+          
           try {
-            try { createColumnFilter('#agendamentosHojeTable','Tipo'); } catch(_){}
-            try { createColumnFilter('#agendamentosHojeTable','Nome'); } catch(_){}
-            try { createColumnFilter('#agendamentosHojeTable','Status'); } catch(_){}
+            try { createColumnFilterWithDropdown('#agendamentosHojeTable','Tipo', 1); } catch(_){}
+            try { createColumnFilterWithDropdown('#agendamentosHojeTable','Nome', 4); } catch(_){}
+            try { createColumnFilterWithDropdown('#agendamentosHojeTable','Status', 8); } catch(_){}
             try{
               var $cf = $('#agendamentosHojeTable').prev('.column-filters');
               if ($cf && $cf.length) {

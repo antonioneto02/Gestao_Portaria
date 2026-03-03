@@ -9,7 +9,7 @@ async function getReservationsBetween(startDate, endDate) {
       const req = pool.request();
       req.input('start', sql.DateTime2, startDate);
       req.input('end', sql.DateTime2, endDate);
-        const q = `SELECT h.id, h.pedido, h.data, h.categoria AS categoria, h.observacao AS observacao, h.criado_por AS usuario, h.nome_cli AS cliente_nome, h.cod_cli AS cliente_cod, h.status AS status, h.data_entrada AS data_entrada, h.data_saida AS data_saida, h.dt_criacao AS created_at,
+        const q = `SELECT DISTINCT h.id, h.pedido, h.data, h.categoria AS categoria, h.observacao AS observacao, h.criado_por AS usuario, h.nome_cli AS cliente_nome, h.cod_cli AS cliente_cod, h.status AS status, h.data_entrada AS data_entrada, h.data_saida AS data_saida, h.dt_criacao AS created_at,
                  c.NOME AS cliente_nome_dim, c.FANTASIA AS cliente_fantasia
                FROM [dw].[dbo].[HORARIOS_AGENDAMENTO] h
                LEFT JOIN [dw].[dbo].[DIM_CLIENTES] c ON c.COD_CLIENTE = h.cod_cli
@@ -175,8 +175,22 @@ async function createReservation({ pedido, dt_horario, usuario, cliente_nome, cl
             reqCentral.input('erro', sql.NVarChar(1000), null);
             reqCentral.input('dtenvio', sql.DateTime2, null);
             reqCentral.input('message_id', sql.NVarChar(200), null);
-            const qCentral = `INSERT INTO [dw].[dbo].[FATO_FILA_NOTIFICACOES_DEV] (TIPO_MENSAGEM, DESTINATARIO, MENSAGEM, TEMPLATE_NAME, TEMPLATE_PARAMS, STATUS, TENTATIVAS, ERRO, DTINC, DTENVIO, MESSAGE_ID, METADADOS) VALUES (@tipo_mensagem, @destinatario, @mensagem, @template_name, @template_params, @status, @tentativas, @erro, GETDATE(), @dtenvio, @message_id, @metadados)`;
+            const qCentral = `INSERT INTO [dw].[dbo].[FATO_FILA_NOTIFICACOES] (TIPO_MENSAGEM, DESTINATARIO, MENSAGEM, TEMPLATE_NAME, TEMPLATE_PARAMS, STATUS, TENTATIVAS, ERRO, DTINC, DTENVIO, MESSAGE_ID, METADADOS) VALUES (@tipo_mensagem, @destinatario, @mensagem, @template_name, @template_params, @status, @tentativas, @erro, GETDATE(), @dtenvio, @message_id, @metadados)`;
             await reqCentral.query(qCentral);
+
+            const reqCentral2 = poolCentral.request();
+            reqCentral2.input('destinatario', sql.NVarChar(500), '');
+            reqCentral2.input('mensagem', sql.NVarChar(sql.MAX), corpo);
+            reqCentral2.input('tipo_mensagem', sql.NVarChar(50), 'EMAIL');
+            reqCentral2.input('status', sql.NVarChar(50), 'PENDENTE');
+            reqCentral2.input('tentativas', sql.Int, 0);
+            reqCentral2.input('template_name', sql.NVarChar(200), null);
+            reqCentral2.input('template_params', sql.NVarChar(sql.MAX), null);
+            reqCentral2.input('metadados', sql.NVarChar(sql.MAX), JSON.stringify(metadadosObj));
+            reqCentral2.input('erro', sql.NVarChar(1000), null);
+            reqCentral2.input('dtenvio', sql.DateTime2, null);
+            reqCentral2.input('message_id', sql.NVarChar(200), null);
+            await reqCentral2.query(qCentral);
           } finally {
             try { await poolCentral.close(); } catch(_){}
           }

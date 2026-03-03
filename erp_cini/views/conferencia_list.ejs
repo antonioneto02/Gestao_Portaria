@@ -206,6 +206,7 @@
             }
             td.textContent = formatted;
             td.setAttribute('title', formatted);
+            if (typeof raw === 'string' && raw.length) td.setAttribute('data-order', raw);
           }catch(_){ }
         });
       }

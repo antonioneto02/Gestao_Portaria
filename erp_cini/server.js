@@ -687,6 +687,7 @@ app.get('/listagem/agendamento-portal', ensureAuth, async (req, res) => {
       ,[nome]
       ,[concluido_por]
       ,[dt_cheg]
+      ,[enviou]
   FROM [dw].[dbo].[AGENDAMENTO_PORTAL]
   ORDER BY dt_criacao DESC`;
       const r = await pool.request().query(q);
@@ -1092,11 +1093,11 @@ app.post('/agendamentos', ensureAuth, express.json(), async (req, res) => {
           const reqNotif = poolDw.request();
           reqNotif.input('tipo', sql.VarChar(100), tipoMsg);
           reqNotif.input('dest', sql.VarChar(500), destinatario ? String(destinatario) : null);
-          reqNotif.input('mensagem', sql.VarChar(2000), mensagemText);
+          reqNotif.input('mensagem', sql.NVarChar(4000), mensagemText);
           reqNotif.input('template', sql.VarChar(200), templateName);
           reqNotif.input('params', sql.VarChar(2000), templateParams);
           reqNotif.input('status', sql.VarChar(50), statusMsg);
-          reqNotif.input('metadados', sql.VarChar(4000), metadata);
+          reqNotif.input('metadados', sql.NVarChar(4000), metadata);
 
           const insertNotif = `INSERT INTO [dw].[dbo].[FATO_FILA_NOTIFICACOES] (TIPO_MENSAGEM, DESTINATARIO, MENSAGEM, TEMPLATE_NAME, TEMPLATE_PARAMS, STATUS, TENTATIVAS, ERRO, DTINC, DTENVIO, MESSAGE_ID, METADADOS)
                                VALUES (@tipo, @dest, @mensagem, @template, @params, @status, 0, NULL, GETDATE(), NULL, NULL, @metadados)`;
@@ -1108,14 +1109,158 @@ app.post('/agendamentos', ensureAuth, express.json(), async (req, res) => {
       } catch (notifErr) {
         console.error('Erro ao enfileirar notificacao:', notifErr && notifErr.message ? notifErr.message : notifErr);
       }
-      return res.json({ success: true });
+      try {
+        const agendamentoModel = require('./models/agendamentoModel');
+        const result = await agendamentoModel.insert(toInsert);
+        return res.json({ success: true, id: result });
+      } catch (insertErr) {
+        console.error('Erro ao inserir agendamento na tabela AGENDAMENTO_PORTAL:', insertErr && insertErr.message ? insertErr.message : insertErr);
+        return res.status(500).json({ success: false, message: 'Erro ao salvar agendamento no banco' });
+      }
     } catch (err) {
-      console.error('Erro ao inserir agendamento via model:', err && err.message ? err.message : err);
+      console.error('Erro ao salvar agendamento:', err && err.message ? err.message : err);
       return res.status(500).json({ success: false, message: 'Erro ao salvar no banco' });
     }
   } catch (err) {
     console.error('Erro ao salvar agendamento:', err);
     return res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+app.post('/notificacoes', ensureAuth, express.json(), async (req, res) => {
+  try {
+    const payload = req.body;
+    const { mensagem, responsavel, telefone, agendamentos_ids } = payload;
+
+    if (!mensagem || !responsavel) {
+      console.error('DEBUG /notificacoes - Validação falhou: mensagem ou responsavel vazio');
+      return res.status(400).json({ success: false, message: 'Mensagem e responsável são obrigatórios' });
+    }
+
+    let destinatario = telefone ? String(telefone).replace(/\D+/g, '') : null;
+    if (!destinatario) {
+      try {
+        let responsavelObj = null;
+        let responsavelNome = null;
+        
+        if (typeof responsavel === 'string') {
+          responsavelNome = responsavel;
+          try {
+            responsavelObj = JSON.parse(responsavel);
+          } catch(e) {
+            responsavelObj = { raNome: responsavel };
+          }
+        } else if (typeof responsavel === 'object') {
+          responsavelObj = responsavel;
+          responsavelNome = responsavel.raNome || responsavel.nome || null;
+        }
+        if (responsavelObj && responsavelObj.raNumCelu) {
+          destinatario = String(responsavelObj.raNumCelu).replace(/\D+/g, '');
+        }
+        if (!destinatario && responsavelObj && (responsavelObj.id || responsavelObj.RA_MAT)) {
+          const responsavelId = responsavelObj.id || responsavelObj.RA_MAT;
+          if (responsavelId) {
+            const poolP = await new sql.ConnectionPool(dbProtheus).connect();
+            try {
+              const q = `SELECT RA_MAT, RA_NOME, RA_DDDCELU, RA_NUMCELU, RA_TELEFON FROM SRA010 WHERE LTRIM(RTRIM(RA_MAT)) = @mat OR RA_MAT = RIGHT('000000' + @mat,6)`;
+              const r = await poolP.request().input('mat', sql.VarChar, String(responsavelId)).query(q);
+              const userRec = (r.recordset && r.recordset[0]) ? r.recordset[0] : null;
+              if (userRec) {
+                const ddd = (userRec.RA_DDDCELU || '').toString().trim();
+                const num = (userRec.RA_NUMCELU || '').toString().trim() || (userRec.RA_TELEFON || '').toString().trim();
+                if (ddd && num) destinatario = (ddd + num).replace(/\D+/g, '');
+              }
+            } finally {
+              try { await poolP.close(); } catch(_){ }
+            }
+          }
+        }
+        
+        if (!destinatario && responsavelNome) {
+          try {
+            const searchName = String(responsavelNome || '').replace(/[\.\_\-\@]/g, ' ').trim();
+            if (searchName) {
+              const tokens = searchName.split(/\s+/).map(t => t.trim()).filter(t => t && t.length >= 2);
+              if (tokens.length) {
+                const poolP = await new sql.ConnectionPool(dbProtheus).connect();
+                try {
+                  const whereParts = tokens.map((t, i) => `RA_NOME COLLATE Latin1_General_CI_AI LIKE @tok${i}`);
+                  const q = `SELECT TOP 1 RA_MAT, RA_NOME, RA_DDDCELU, RA_NUMCELU, RA_TELEFON FROM SRA010 WHERE ${whereParts.join(' AND ')}`;
+                  const reqP = poolP.request();
+                  tokens.forEach((t, i) => reqP.input(`tok${i}`, sql.VarChar, `%${t}%`));
+                  const r = await reqP.query(q);
+                  const userRec = (r && r.recordset && r.recordset[0]) ? r.recordset[0] : null;
+                  if (userRec) {
+                    const ddd = (userRec.RA_DDDCELU || '').toString().trim();
+                    const num = (userRec.RA_NUMCELU || '').toString().trim() || (userRec.RA_TELEFON || '').toString().trim();
+                    if (ddd && num) destinatario = (ddd + num).replace(/\D+/g, '');
+                  }
+                } finally {
+                  try { await poolP.close(); } catch(_){ }
+                }
+              }
+            }
+          } catch (e) {
+            console.error('Erro ao buscar responsável por nome:', e && e.message ? e.message : e);
+          }
+        }
+      } catch (e) {
+        console.error('Erro ao buscar telefone do responsável:', e && e.message ? e.message : e);
+      }
+    }
+    
+    if (!destinatario) {
+      destinatario = responsavel;
+    }
+
+    const poolDw = await new sql.ConnectionPool(dbDw).connect();
+    try {
+      const tipoMsg = 'ENTREVISTA';
+      const statusMsg = 'PENDENTE';
+      const metadata = JSON.stringify({ agendamentos_ids: agendamentos_ids || [], responsavel: responsavel });
+      
+      // Garantir que a mensagem está em UTF-8 e com emojis preservados
+      const mensagemFinal = String(mensagem || '');
+      
+      const req_notif = poolDw.request();
+      req_notif.input('tipo', sql.VarChar(100), tipoMsg);
+      req_notif.input('dest', sql.VarChar(500), destinatario);
+      req_notif.input('mensagem', sql.NVarChar(4000), mensagemFinal);
+      req_notif.input('template', sql.VarChar(200), null);
+      req_notif.input('params', sql.VarChar(2000), null);
+      req_notif.input('status', sql.VarChar(50), statusMsg);
+      req_notif.input('metadados', sql.NVarChar(4000), metadata);
+
+      const insertNotif = `INSERT INTO [dw].[dbo].[FATO_FILA_NOTIFICACOES] (TIPO_MENSAGEM, DESTINATARIO, MENSAGEM, TEMPLATE_NAME, TEMPLATE_PARAMS, STATUS, TENTATIVAS, ERRO, DTINC, DTENVIO, MESSAGE_ID, METADADOS)
+                           VALUES (@tipo, @dest, @mensagem, @template, @params, @status, 0, NULL, GETDATE(), NULL, NULL, @metadados)`;
+      await req_notif.query(insertNotif);
+      if (agendamentos_ids && Array.isArray(agendamentos_ids) && agendamentos_ids.length > 0) {
+        try {
+          const idsList = agendamentos_ids.map(id => parseInt(id, 10)).filter(id => !isNaN(id));
+          if (idsList.length > 0) {
+            const updateReq = poolDw.request();
+            const placeholders = idsList.map((id, idx) => `@id${idx}`).join(',');
+            idsList.forEach((id, idx) => {
+              updateReq.input(`id${idx}`, sql.Int, id);
+            });
+            const updateQuery = `UPDATE [dw].[dbo].[AGENDAMENTO_PORTAL] SET enviou = 1 WHERE id IN (${placeholders})`;
+            const updateResult = await updateReq.query(updateQuery);
+          }
+        } catch (updateErr) {
+          console.error('Erro ao marcar agendamentos como enviados:', updateErr && updateErr.message ? updateErr.message : updateErr);
+          console.error('Stack trace:', updateErr);
+        }
+      } else {
+        console.warn('DEBUG /notificacoes - agendamentos_ids não fornecido ou vazio');
+      }
+      
+      return res.json({ success: true, message: 'Notificação enfileirada com sucesso' });
+    } finally {
+      try { await poolDw.close(); } catch(_){ }
+    }
+  } catch (notifErr) {
+    console.error('Erro ao enfileirar notificação:', notifErr && notifErr.message ? notifErr.message : notifErr);
+    return res.status(500).json({ success: false, message: 'Erro ao enfileirar notificação' });
   }
 });
 
@@ -1194,10 +1339,12 @@ app.get('/horarios-retira', ensureAuth, async (req, res) => {
         endIso = qEnd;
       }
     }
+    const dowMap = ['DOM.','SEG.','TER.','QUA.','QUI.','SEX.','SÁB.'];
     for (let d = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()), i = 0; d <= endDate; d.setDate(d.getDate()+1), i++) {
       const copy = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-      const label = copy.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
       const isoDate = copy.getFullYear() + '-' + String(copy.getMonth()+1).padStart(2,'0') + '-' + String(copy.getDate()).padStart(2,'0');
+      const dow = dowMap[(copy.getDay() || 0)];
+      const label = dow;
       days.push({ label, isoDate });
     }
     const startDateTime = parseLocalDateTimeString(days[0].isoDate + ' 00:00:00');
@@ -1422,59 +1569,6 @@ app.post('/horarios-retira/book-multipart', ensureAuth, upload.single('attachmen
   } catch (e) {
     console.error('Erro book horarios-retira (multipart):', e && e.message ? e.message : e);
     return res.status(500).json({ success: false, message: 'Erro interno' });
-  }
-});
-
-app.get('/horarios-retira/debug', ensureAuth, async (req, res) => {
-  try {
-    const days = [];
-    const today = new Date();
-    for (let i=0;i<7;i++) {
-      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate()+i);
-      const isoDate = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-      days.push({ isoDate });
-    }
-    const startDate = new Date(days[0].isoDate + 'T00:00:00');
-    const endDate = new Date(days[days.length-1].isoDate + 'T23:59:59');
-    const reservations = await horariosRetiraModel.getReservationsBetween(startDate, endDate);
-    return res.json({ success: true, startDate: startDate.toISOString(), endDate: endDate.toISOString(), count: (reservations||[]).length, reservations });
-  } catch (e) {
-    console.error('Erro debug horarios-retira:', e && e.message ? e.message : e);
-    return res.status(500).json({ success: false, message: 'Erro debug' });
-  }
-});
-
-app.get('/horarios-retira/debug/check', ensureAuth, async (req, res) => {
-  try {
-    const dtRaw = req.query && req.query.dt ? String(req.query.dt) : null;
-    if (!dtRaw) return res.status(400).json({ success: false, message: 'dt query param required (YYYY-MM-DD HH:MM:SS)' });
-    const iso = dtRaw.includes('T') ? dtRaw : dtRaw.replace(' ', 'T');
-    const dt = new Date(iso);
-    if (isNaN(dt.getTime())) return res.status(400).json({ success: false, message: 'invalid dt' });
-    const r = await horariosRetiraModel.getReservationByDateTime(dt);
-    return res.json({ success: true, found: !!r, reservation: r });
-  } catch (e) {
-    console.error('Erro debug check horarios-retira:', e && e.message ? e.message : e);
-    return res.status(500).json({ success: false, message: 'Erro debug check' });
-  }
-});
-
-app.get('/horarios-retira/debug/all', ensureAuth, async (req, res) => {
-  try {
-    const pool = await new sql.ConnectionPool(dbDw).connect();
-    try {
-            const q = `SELECT COUNT(*) AS total FROM [dw].[dbo].[HORARIOS_AGENDAMENTO];
-              SELECT TOP 50 id, pedido, data, nf, categoria, observacao, nome_cli, cod_cli, status, criado_por, dt_criacao FROM [dw].[dbo].[HORARIOS_AGENDAMENTO] ORDER BY dt_criacao DESC`;
-      const r = await pool.request().query(q);
-      const total = (r.recordsets && r.recordsets[0] && r.recordsets[0][0]) ? r.recordsets[0][0].total : null;
-      const rows = (r.recordsets && r.recordsets[1]) ? r.recordsets[1] : (r.recordset || []);
-      return res.json({ success: true, total, rows });
-    } finally {
-      try { await pool.close(); } catch(_){}
-    }
-  } catch (e) {
-    console.error('Erro debug all horarios-retira:', e && e.message ? e.message : e);
-    return res.status(500).json({ success: false, message: 'Erro debug all' });
   }
 });
 

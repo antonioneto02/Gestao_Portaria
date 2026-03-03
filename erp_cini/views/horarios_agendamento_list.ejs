@@ -130,17 +130,143 @@
 
     <script>
       window.agendamentosData = <%- JSON.stringify(agendamentos || []) %>;
-      document.addEventListener('DOMContentLoaded', function(){
-        try { if (window.$ && $.fn && $.fn.DataTable) { var dt = $('#dataTable').DataTable({ autoWidth:false, dom: "<'top'<'d-flex justify-content-between'<'dt-length'l><'d-flex justify-content-end align-items-center'<'dt-search'f><'dt-buttons ms-2'B>>>>rtip", buttons:[{ extend:'excelHtml5', text:'<i class="fas fa-file-excel"></i> Excel', className:'btn btn-success btn-sm' }], lengthMenu:[[5,10,25,-1],[5,10,25,'Todos']], pageLength:10 }); try{ dt.on('draw', function(){ formatDatetimeCells('.datetime-cell'); }); }catch(_){ } 
+      
+      function createColumnFilterWithDropdown(tableSelector, columnName, columnIndex) {
+        try {
+          var $table = $(tableSelector);
+          if (!$table || !$table.length) return;
+          
+          var $container = $table.prev('.column-filters');
+          if (!$container.length) {
+            $container = $('<div class="column-filters mb-2 d-flex gap-2 flex-nowrap" style="overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;"></div>');
+            $table.before($container);
+          }
+          
+          var safeId = ('colfilter_' + columnName.replace(/[^a-z0-9]/gi,'_') + '_' + columnIndex);
+          var existingInput = $container.find('#' + safeId);
+          
+          if (!existingInput.length) {
+            var $input = $('<input type="search" class="form-control form-control-sm" placeholder="' + columnName + '" />').attr('id', safeId);
+            $input.css({ 'min-width': '200px', 'flex': '0 0 auto', 'position': 'relative' });
+            $container.append($input);
+            existingInput = $input;
+          }
+          
+          var table = $table.DataTable ? $table.DataTable() : null;
+          if (!table) return;
+          
+          var uniqueValues = [];
+          try {
+            var vals = table.column(columnIndex).data().toArray();
+            vals.forEach(function(v) {
+              try {
+                var text = $('<div>').html(v).text().toString().trim();
+                if (text && uniqueValues.indexOf(text) === -1) {
+                  uniqueValues.push(text);
+                }
+              } catch(_) {}
+            });
+            uniqueValues.sort();
+          } catch(e) { return; }
+          
+          var dropdownId = safeId + '_dropdown';
+          var existingDropdown = $container.find('#' + dropdownId);
+          if (existingDropdown.length) existingDropdown.remove();
+          
+          var $dropdown = $('<div id="' + dropdownId + '" class="dropdown-column" style="position:fixed; width:200px; background:white; border:1px solid #ccc; border-radius:4px; max-height:240px; overflow-y:auto; z-index:9999; box-shadow:0 2px 8px rgba(0,0,0,0.15); display:none;">');
+          
+          var $clearItem = $('<div style="padding:8px 12px; cursor:pointer; background:#f8f9fa; border-bottom:1px solid #eee; color:#666; font-size:12px; font-weight:500;">— Limpar filtro —</div>');
+          $clearItem.on('click', function(){ existingInput.val('').trigger('input'); $dropdown.hide(); });
+          $dropdown.append($clearItem);
+          
+          uniqueValues.forEach(function(val) {
+            var $item = $('<div style="padding:8px 12px; cursor:pointer; border-bottom:1px solid #eee; font-size:13px;">').text(val);
+            $item.on('mouseenter', function(){ $(this).css('background', '#f0f0f0'); });
+            $item.on('mouseleave', function(){ $(this).css('background', 'white'); });
+            $item.on('click', function(){
+              existingInput.val(val).trigger('input');
+              $dropdown.hide();
+            });
+            $dropdown.append($item);
+          });
+          
+          $('body').append($dropdown);
+          
+          function positionDropdown() {
             try {
-              try { createColumnFilter('#dataTable','Pedido'); } catch(_){}
-              try { createColumnFilter('#dataTable','Nome Cliente'); } catch(_){}
-              try { createColumnFilter('#dataTable','Status'); } catch(_){}
+              var rect = existingInput[0].getBoundingClientRect();
+              $dropdown.css({
+                top: (rect.bottom + 2) + 'px',
+                left: rect.left + 'px',
+                width: rect.width + 'px'
+              });
+            } catch(e) {}
+          }
+          
+          var scrollTimeout = null;
+          existingInput.on('focus', function(){ positionDropdown(); $dropdown.show(); });
+          existingInput.on('blur', function(){ setTimeout(function(){ $dropdown.hide(); }, 150); });
+          existingInput.on('click', function(){ positionDropdown(); $dropdown.show(); });
+          $(window).on('scroll', function(){ 
+            $dropdown.hide();
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(function(){
+              if (existingInput.is(':focus')) { positionDropdown(); $dropdown.show(); }
+            }, 150);
+          });
+          
+          existingInput.on('input', function(){
+            var searchTerm = $(this).val().toLowerCase();
+            $dropdown.find('div').each(function(idx){
+              if (idx === 0) return;
+              var text = $(this).text().toLowerCase();
+              $(this).toggle(text.indexOf(searchTerm) !== -1);
+            });
+            if (searchTerm) { positionDropdown(); $dropdown.show(); }
+            if (table && table.column) { table.column(columnIndex).search($(this).val()).draw(); }
+          });
+        } catch(e) {}
+      }
+      
+      function updateIndicators(dt) {
+        try {
+          const filteredData = dt.rows({ search: 'applied' }).data().toArray();
+          const clientesSet = new Set(); const pedidosSet = new Set(); const usersSet = new Set();
+          let totalRecords = 0;
+          
+          filteredData.forEach(function(row) {
+            try {
+              if (row[1] && String(row[1]).trim()) pedidosSet.add(String(row[1]).trim()); // Pedido
+              if (row[3] && String(row[3]).trim()) clientesSet.add(String(row[3]).trim()); // Nome Cliente
+              if (row[7] && String(row[7]).trim()) usersSet.add(String(row[7]).trim()); // Criado Por
+              totalRecords++;
+            } catch(_) {}
+          });
+          
+          document.querySelectorAll('.widgets-grid .widget-content h3')[0].textContent = totalRecords;
+          document.getElementById('clientsCount').textContent = clientesSet.size || 0;
+          document.getElementById('pedidosCount').textContent = pedidosSet.size || 0;
+          document.getElementById('usersCount').textContent = usersSet.size || 0;
+        } catch(e) {}
+      }
+      
+      document.addEventListener('DOMContentLoaded', function(){
+        try { if (window.$ && $.fn && $.fn.DataTable) { var dt = $('#dataTable').DataTable({ autoWidth:false, dom: "<'top'<'d-flex justify-content-between'<'dt-length'l><'d-flex justify-content-end align-items-center'<'dt-search'f><'dt-buttons ms-2'B>>>>rtip", buttons:[{ extend:'excelHtml5', text:'<i class="fas fa-file-excel"></i> Excel', className:'btn btn-success btn-sm' }], lengthMenu:[[5,10,25,-1],[5,10,25,'Todos']], pageLength:10 }); 
+            window.agendamentosDataTable = dt;
+            try{ dt.on('draw', function(){ formatDatetimeCells('.datetime-cell'); updateIndicators(dt); }); }catch(_){ } 
+            try{ dt.on('search.dt', function(){ updateIndicators(dt); }); }catch(_){ }
+            try{ dt.on('length.dt', function(){ updateIndicators(dt); }); }catch(_){ }
+            try {
+              try { createColumnFilterWithDropdown('#dataTable', 'Pedido', 1); } catch(_){}
+              try { createColumnFilterWithDropdown('#dataTable', 'Nome Cliente', 3); } catch(_){}
+              try { createColumnFilterWithDropdown('#dataTable', 'Status', 8); } catch(_){}
               try{
                 var $cf = $('#dataTable').prev('.column-filters');
                 if ($cf && $cf.length) {
                   $cf.css({ 'overflow-x': 'hidden', 'flex-wrap': 'nowrap', 'gap': '6px' });
                   $cf.find('input').css({ 'min-width': '120px', 'width': 'auto', 'flex': '0 0 auto' });
+                  $cf.find('input').on('change keyup', function(){ if (window.agendamentosDataTable) { updateIndicators(window.agendamentosDataTable); } });
+                  $(document).on('keyup', '.dataTables_filter input', function(){ if (window.agendamentosDataTable) { updateIndicators(window.agendamentosDataTable); } });
                 }
               }catch(_){ }
             } catch(_){ }
@@ -161,6 +287,7 @@
               }
               td.textContent = formatted;
               td.setAttribute('title', formatted);
+              if (typeof raw === 'string' && raw.length) td.setAttribute('data-order', raw);
             }catch(_){ }
           });
         }

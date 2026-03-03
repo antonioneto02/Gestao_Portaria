@@ -27,6 +27,53 @@
         color: #721c24 !important;
         font-weight: bold;
       }
+      input[type="checkbox"].entrevista-checkbox {
+        appearance: none !important;
+        -webkit-appearance: none !important;
+        -moz-appearance: none !important;
+        width: 17px !important;
+        height: 17px !important;
+        min-width: 17px !important;
+        min-height: 17px !important;
+        cursor: pointer;
+        border: 2px solid #ccc !important;
+        border-radius: 3px !important;
+        background-color: #fff !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        position: relative;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      input[type="checkbox"].entrevista-checkbox:checked::after {
+        content: "✓" !important;
+        color: #28a745 !important;
+        font-size: 14px !important;
+        font-weight: bold !important;
+        line-height: 1 !important;
+        display: block !important;
+        text-align: center !important;
+      }
+      input[type="checkbox"].entrevista-checkbox.entrevista-checkbox-enviada {
+        background-color: #fff !important;
+        border-color: #28a745 !important;
+      }
+      input[type="checkbox"].entrevista-checkbox.entrevista-checkbox-enviada:checked {
+        background-color: #fff !important;
+        border-color: #28a745 !important;
+      }
+      input[type="checkbox"].entrevista-checkbox.entrevista-checkbox-enviada:disabled {
+        background-color: #fff !important;
+        border-color: #28a745 !important;
+        cursor: not-allowed !important;
+      }
+      input[type="checkbox"].entrevista-checkbox:disabled {
+        cursor: not-allowed !important;
+      }
+      .hidden-container {
+        display: none !important;
+      }
     </style>
   </head>
   <body>
@@ -83,6 +130,7 @@
           <div class="top-actions">
             <div>
               <button id="btnNovo" class="btn btn-primary"><i class="fas fa-plus"></i> Cadastrar Agendamento</button>
+              <button id="btnEnviarResponsavel" class="btn btn-info ms-2" style="display:none;"><i class="fas fa-send"></i> Enviar ao Responsável</button>
             </div>
           </div>
           
@@ -93,18 +141,21 @@
             <thead>
               <tr>
                 <% if (agendamentos && agendamentos.length) { %>
+                  <th style="width: 25px; text-align: center;">RH</th>
                   <% 
                      const keys = Object.keys(agendamentos[0]);
                      const preferred = ['id','data_hora','dataHora','DataHora','tipo','assunto','nome','responsavel','telefone','cpf_cnpj','status','criado_por','dt_criacao'];
+                     const excluded = ['enviou'];
                      const ordered = [];
-                     preferred.forEach(k=>{ if (keys.indexOf(k)!==-1 && ordered.indexOf(k)===-1) ordered.push(k); });
-                     keys.forEach(k=>{ if (ordered.indexOf(k)===-1) ordered.push(k); });
+                     preferred.forEach(k=>{ if (keys.indexOf(k)!==-1 && ordered.indexOf(k)===-1 && excluded.indexOf(k)===-1) ordered.push(k); });
+                     keys.forEach(k=>{ if (ordered.indexOf(k)===-1 && excluded.indexOf(k)===-1) ordered.push(k); });
                   %>
                   <% for(let i=0;i<ordered.length;i++){ const k = ordered[i]; %>
                     <th><%= k.replace(/_/g,' ').replace(/\b\w/g, l=>l.toUpperCase()) %></th>
                   <% } %>
                   <th class="actions-col">Ações</th>
                 <% } else { %>
+                  <th style="width: 25px; text-align: center;">RH</th>
                   <th>ID</th>
                   <th>Data / Hora</th>
                   <th>Tipo</th>
@@ -122,13 +173,31 @@
               <% if (agendamentos && agendamentos.length) {
                    const keys = Object.keys(agendamentos[0]);
                    const preferred = ['id','data_hora','dataHora','DataHora','tipo','assunto','nome','responsavel','telefone','cpf_cnpj','status','criado_por','dt_criacao'];
+                   const excluded = ['enviou'];
                    const ordered = [];
-                   preferred.forEach(k=>{ if (keys.indexOf(k)!==-1 && ordered.indexOf(k)===-1) ordered.push(k); });
-                   keys.forEach(k=>{ if (ordered.indexOf(k)===-1) ordered.push(k); });
+                   preferred.forEach(k=>{ if (keys.indexOf(k)!==-1 && ordered.indexOf(k)===-1 && excluded.indexOf(k)===-1) ordered.push(k); });
+                   keys.forEach(k=>{ if (ordered.indexOf(k)===-1 && excluded.indexOf(k)===-1) ordered.push(k); });
                    agendamentos.forEach(function(a){
                 %>
                   <tr>
+                    <td style="text-align: center; display: flex; align-items: center; justify-content: center; padding: 0.5rem !important; height: 30px;">
+                      <% var tipo = a['tipo_outro'] && String(a['tipo_outro']).trim() ? a['tipo_outro'] : a['tipo']; %>
+                      <% var responsavel = a['responsavel']; %>
+                      <% var euSou = a['eu_sou_o_responsavel']; %>
+                      <% var enviou = a['enviou']; %>
+                      <% if (tipo === 'Entrevista' && responsavel && !euSou) { %>
+                        <input type="checkbox" class="form-check-input entrevista-checkbox <% if (enviou) { %>entrevista-checkbox-enviada<% } %>" data-id="<%= a.id %>" data-responsavel="<%= typeof responsavel === 'object' ? JSON.stringify(responsavel) : JSON.stringify({raNome: responsavel}) %>" data-nome="<%= a.nome %>" data-data="<%= a.data_hora %>" <% if (enviou) { %>checked disabled<% } %> style="cursor:pointer; margin: 0;">
+                      <% } else { %>
+                        <span style="color: #ccc;">—</span>
+                      <% } %>
+                    </td>
                     <% ordered.forEach(function(col){
+                         if (col === 'id') { %>
+                           <td>
+                             <span><%= a.id %></span>
+                           </td>
+                         <% } else { %>
+                           <%
                          let raw = a[col];
                          let display = raw;
                          if (col === 'tipo') {
@@ -168,8 +237,7 @@
                            }
                          }
                     %>
-                      <td class="cell-tooltip <%= (col && (col.toLowerCase()==='data_hora' || col.toLowerCase().includes('data') || col.toLowerCase().includes('hora') || col.toLowerCase().indexOf('dt_criacao')!==-1)) ? 'datetime-cell' : '' %> <%= extraClass %>" title="<%= display %>" data-dt="<%= raw %>"><%= display %></td>
-                    <% }) %>
+                      <td class="cell-tooltip <%= (col && (col.toLowerCase()==='data_hora' || col.toLowerCase().includes('data') || col.toLowerCase().includes('hora') || col.toLowerCase().indexOf('dt_criacao')!==-1)) ? 'datetime-cell' : '' %> <%= extraClass %>" title="<%= display %>" data-dt="<%= raw %>"><%= display %></td>                        <% } %>                    <% }) %>
                     <td class="actions-col text-center">
                       <button type="button" class="btn btn-danger btn-icon-sm btn-excluir-carga btn-excluir-agendamento" data-id="<%= a.id %>" title="Excluir">
                         <i class="fas fa-trash"></i>
@@ -218,6 +286,7 @@
                       <option value="Visita">Visita</option>
                       <option value="Prestacao de Servicos">Prestação de Serviços</option>
                       <option value="Fornecedor">Fornecedor</option>
+                      <option value="Entrevista">Entrevista</option>
                       <option value="Outro">Outro</option>
                     </select>
                   </div>
@@ -257,6 +326,14 @@
                       </label>
                     </div>
                   </div>
+                  <div class="col-md-6 d-flex align-items-center mb-3 mt-3 hidden-container" id="entrevistaUnicaContainer">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" value="1" id="entrevistaUnica" name="entrevista_unica">
+                      <label class="form-check-label" for="entrevistaUnica">
+                        Entrevista única?
+                      </label>
+                    </div>
+                  </div>
                   <div class="col-md-12">
                     <label class="form-label">Observações</label>
                     <textarea id="observacoes" name="observacoes" class="form-control" rows="2"></textarea>
@@ -272,7 +349,6 @@
         </div>
             </div>
           </div>
-
         </div>
       </div>
     </div>
@@ -290,6 +366,44 @@
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
             <button type="button" id="confirmDeleteAgendamento" class="btn btn-danger">Excluir</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="confirmEnviarEntrevistaModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Confirmar Envio de Entrevista</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p><strong>Você está prestes a enviar notificação para:</strong></p>
+            <div id="entrevistaListaConfirmacao" style="background:#f8f9fa;padding:12px;border-radius:4px;max-height:300px;overflow-y:auto;margin-bottom:15px;">
+            </div>
+            <p>Tem certeza que deseja enviar estas entrevistas ao responsável?</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="button" id="confirmEnviarEntrevista" class="btn btn-info">Enviar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="successNotificacaoModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Sucesso</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p>Notificação enviada com sucesso!</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-primary" data-bs-dismiss="modal">OK</button>
           </div>
         </div>
       </div>
@@ -348,6 +462,102 @@
             }
           }
         });
+        
+        function createColumnFilterWithDropdown(tableSelector, columnName, columnIndex) {
+          try {
+            var $table = $(tableSelector);
+            if (!$table || !$table.length) return;
+            var $container = $table.prev('.column-filters');
+            if (!$container.length) {
+              $container = $('<div class="column-filters mb-2 d-flex gap-2 flex-nowrap" style="overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;"></div>');
+              $table.before($container);
+            }
+            var safeId = ('colfilter_' + columnName.replace(/[^a-z0-9]/gi,'_') + '_' + columnIndex);
+            var existingInput = $container.find('#' + safeId);
+            if (!existingInput.length) {
+              var $input = $('<input type="search" class="form-control form-control-sm" placeholder="' + columnName + '" />').attr('id', safeId);
+              $input.css({ 'min-width': '200px', 'flex': '0 0 auto', 'position': 'relative' });
+              $container.append($input);
+              existingInput = $input;
+            }
+            var table = $table.DataTable ? $table.DataTable() : null;
+            if (!table) return;
+            var uniqueValues = [];
+            try {
+              var vals = table.column(columnIndex).data().toArray();
+              vals.forEach(function(v) {
+                try {
+                  var text = $('<div>').html(v).text().toString().trim();
+                  if (text && uniqueValues.indexOf(text) === -1) { uniqueValues.push(text); }
+                } catch(_) {}
+              });
+              uniqueValues.sort();
+            } catch(e) { return; }
+            var dropdownId = safeId + '_dropdown';
+            var existingDropdown = $container.find('#' + dropdownId);
+            if (existingDropdown.length) existingDropdown.remove();
+            var $dropdown = $('<div id="' + dropdownId + '" class="dropdown-column" style="position:fixed; width:200px; background:white; border:1px solid #ccc; border-radius:4px; max-height:240px; overflow-y:auto; z-index:9999; box-shadow:0 2px 8px rgba(0,0,0,0.15); display:none;">');
+            var $clearItem = $('<div style="padding:8px 12px; cursor:pointer; background:#f8f9fa; border-bottom:1px solid #eee; color:#666; font-size:12px; font-weight:500;">— Limpar filtro —</div>');
+            $clearItem.on('click', function(){ existingInput.val('').trigger('input'); $dropdown.hide(); });
+            $dropdown.append($clearItem);
+            uniqueValues.forEach(function(val) {
+              var $item = $('<div style="padding:8px 12px; cursor:pointer; border-bottom:1px solid #eee; font-size:13px;">').text(val);
+              $item.on('mouseenter', function(){ $(this).css('background', '#f0f0f0'); });
+              $item.on('mouseleave', function(){ $(this).css('background', 'white'); });
+              $item.on('click', function(){ existingInput.val(val).trigger('input'); $dropdown.hide(); });
+              $dropdown.append($item);
+            });
+            $('body').append($dropdown);
+            function positionDropdown() {
+              try {
+                var rect = existingInput[0].getBoundingClientRect();
+                $dropdown.css({
+                  top: (rect.bottom + 2) + 'px',
+                  left: rect.left + 'px',
+                  width: rect.width + 'px'
+                });
+              } catch(e) {}
+            }
+            var scrollTimeout = null;
+            existingInput.on('focus', function(){ positionDropdown(); $dropdown.show(); });
+            existingInput.on('blur', function(){ setTimeout(function(){ $dropdown.hide(); }, 150); });
+            existingInput.on('click', function(){ positionDropdown(); $dropdown.show(); });
+            $(window).on('scroll', function(){ 
+              $dropdown.hide();
+              clearTimeout(scrollTimeout);
+              scrollTimeout = setTimeout(function(){
+                if (existingInput.is(':focus')) { positionDropdown(); $dropdown.show(); }
+              }, 150);
+            });
+            existingInput.on('input', function(){
+              var searchTerm = $(this).val().toLowerCase();
+              $dropdown.find('div').each(function(idx){
+                if (idx === 0) return;
+                var text = $(this).text().toLowerCase();
+                $(this).toggle(text.indexOf(searchTerm) !== -1);
+              });
+              if (searchTerm) { positionDropdown(); $dropdown.show(); }
+              if (table && table.column) { table.column(columnIndex).search($(this).val()).draw(); }
+            });
+          } catch(e) {}
+        }
+        
+        function updateIndicators(dt) {
+          try {
+            const filteredData = dt.rows({ search: 'applied' }).data().toArray();
+            const tiposSet = new Set(); const statusSet = new Set(); const usersSet = new Set();
+            let totalRecords = 0;
+            filteredData.forEach(function(row) {
+              try {
+                if (row.length > 1 && row[1] && String(row[1]).trim()) tiposSet.add(String(row[1]).trim());
+                if (row.length > 8 && row[8] && String(row[8]).trim()) statusSet.add(String(row[8]).trim());
+                totalRecords++;
+              } catch(_) {}
+            });
+            document.querySelectorAll('.widgets-grid .widget-content h3')[0].textContent = totalRecords;
+          } catch(e) {}
+        }
+        
         function formatDatetimeCells(selector){
           selector = selector || '.datetime-cell';
           document.querySelectorAll(selector).forEach(function(td){
@@ -361,27 +571,49 @@
               }
               td.textContent = formatted;
               td.setAttribute('title', formatted);
+              if (typeof raw === 'string' && raw.length) td.setAttribute('data-order', raw);
             }catch(_){ }
           });
         }
-        try{ if (dataTable && dataTable.on) dataTable.on('draw', function(){ formatDatetimeCells('.datetime-cell'); }); }catch(_){ }
+        window.agendamentosDataTable = dataTable;
+        try{ if (dataTable && dataTable.on) dataTable.on('draw', function(){ formatDatetimeCells('.datetime-cell'); updateIndicators(dataTable); }); }catch(_){ }
+        try{ dataTable.on('search.dt', function(){ updateIndicators(dataTable); }); }catch(_){ }
+        try{ dataTable.on('length.dt', function(){ updateIndicators(dataTable); }); }catch(_){ }
         try { formatDatetimeCells('.datetime-cell'); } catch(_){ }
+        
+        function getColumnIndexByHeader(tableSelector, headerText) {
+          const $headers = $(tableSelector).find('thead th');
+          let index = -1;
+          $headers.each(function(i) {
+            const text = $(this).text().trim().toLowerCase();
+            if (text.includes(headerText.toLowerCase())) {
+              index = i;
+              return false;
+            }
+          });
+          return index;
+        }
+        
         try {
-          createColumnFilter('#dataTable','Nome');
-          createColumnFilter('#dataTable','Status');
-          createColumnFilter('#dataTable','Data / Hora');
+          const nomeIndex = getColumnIndexByHeader('#dataTable', 'nome');
+          const statusIndex = getColumnIndexByHeader('#dataTable', 'status');
+          const tipoIndex = getColumnIndexByHeader('#dataTable', 'tipo');
+          if (nomeIndex >= 0) createColumnFilterWithDropdown('#dataTable','Nome', nomeIndex);
+          if (statusIndex >= 0) createColumnFilterWithDropdown('#dataTable','Status', statusIndex);
+          if (tipoIndex >= 0) createColumnFilterWithDropdown('#dataTable','Tipo', tipoIndex);
           try{
             var $cf = $('#dataTable').prev('.column-filters');
             if ($cf && $cf.length) {
               $cf.css({ 'overflow-x': 'hidden', 'flex-wrap': 'nowrap', 'gap': '6px' });
               $cf.find('input').css({ 'min-width': '120px', 'width': 'auto', 'flex': '0 0 auto' });
+              $cf.find('input').on('change keyup', function(){ if (window.agendamentosDataTable) { updateIndicators(window.agendamentosDataTable); } });
+              $(document).on('keyup', '.dataTables_filter input', function(){ if (window.agendamentosDataTable) { updateIndicators(window.agendamentosDataTable); } });
             }
           }catch(_){ }
         } catch(_){ }
 
         const modalEl = document.getElementById('modalAgendamento');
         const bsModal = new bootstrap.Modal(modalEl);
-
         document.getElementById('btnNovo').addEventListener('click', function(){
           document.getElementById('formAgendamento').reset();
           document.getElementById('outroTipoContainer').style.display = 'none';
@@ -391,22 +623,74 @@
         document.getElementById('tipo').addEventListener('change', function(e){
           if (e.target.value === 'Outro') document.getElementById('outroTipoContainer').style.display = '';
           else document.getElementById('outroTipoContainer').style.display = 'none';
+          
+          // Controlar visibilidade do checkbox Entrevista Única
+          var container = document.getElementById('entrevistaUnicaContainer');
+          if (e.target.value === 'Entrevista') {
+            container.classList.remove('hidden-container');
+          } else {
+            container.classList.add('hidden-container');
+            var checkbox = document.getElementById('entrevistaUnica');
+            if (checkbox) checkbox.checked = false;
+          }
+        });
+
+        document.getElementById('euSouResponsavel').addEventListener('change', function(){
+          var responsavelInput = document.getElementById('responsavelInput');
+          if (this.checked) {
+            responsavelInput.disabled = true;
+            responsavelInput.value = '';
+            document.getElementById('responsavel').value = '';
+            document.getElementById('responsavelDropdown').style.display = 'none';
+          } else {
+            responsavelInput.disabled = false;
+          }
+        });
+
+        document.getElementById('responsavelInput').addEventListener('input', function(){
+          if (this.value && this.value.trim()) {
+            document.getElementById('euSouResponsavel').checked = false;
+          }
         });
 
         document.getElementById('saveAgendamento').addEventListener('click', function(){
           let responsavelObj = null;
+          const responsavelValue = document.getElementById('responsavel').value;
+          const responsavelInputValue = document.getElementById('responsavelInput').value;
+          
+          console.log('DEBUG: responsavel hidden field value:', responsavelValue);
+          console.log('DEBUG: responsavel input field value:', responsavelInputValue);
+          
           try {
-            responsavelObj = JSON.parse(document.getElementById('responsavel').value);
-          } catch (e) {}
+            if (responsavelValue && typeof responsavelValue === 'string') {
+              if (responsavelValue.trim().startsWith('{')) {
+                responsavelObj = JSON.parse(responsavelValue);
+                console.log('DEBUG: parsed responsavelObj:', responsavelObj);
+              } else {
+                responsavelObj = { raNome: responsavelValue };
+                console.log('DEBUG: created raNome object:', responsavelObj);
+              }
+            }
+          } catch (e) { 
+            console.error('Erro ao parse responsavel:', e);
+            console.error('Valor que causou erro:', responsavelValue);
+          }
+          
           const euSou = document.getElementById('euSouResponsavel') && document.getElementById('euSouResponsavel').checked;
+          
+          console.log('DEBUG: euSou:', euSou);
+          console.log('DEBUG: responsavelObj final:', responsavelObj);
+          
           if (!euSou) {
-            if (!responsavelObj || !responsavelObj.raNumCelu || !responsavelObj.raNome) {
+            if (!responsavelObj || !responsavelObj.raNome) {
+              console.error('Validação falhou - responsavelObj:', responsavelObj, 'raNome:', responsavelObj?.raNome);
               alert('Selecione um responsável interno válido ou marque "Eu sou o responsável".');
               return;
             }
-          } else {
+          } else if (euSou) {
             responsavelObj = null;
           }
+          
           function stripNonDigits(v){ return String(v||'').replace(/\D+/g,''); }
           const telEl = document.getElementById('telefone');
           const cpfEl = document.getElementById('cpf_cnpj');
@@ -430,12 +714,161 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
           }).then(r => r.json()).then(resp => {
+            console.log('Response:', resp);
             if (resp && resp.success) {
-              location.reload();
+              
+              function enviarMensagemGeral() {
+                var tipo = data.tipo === 'Outro' ? (data.tipo_outro || data.tipo) : data.tipo;
+                tipo = (tipo || '').toString().trim();
+                var tiposRetiras = ['Retiras', 'Viagem', 'Doacao'];
+                var isRetira = tiposRetiras.includes(tipo);
+                var isVisita = !isRetira;
+              
+                var mensagem = '📌 *AGENDAMENTO CRIADO*\n\n';
+                mensagem += 'Um novo agendamento foi criado no portal *Gestão Portaria*\n\n';
+                mensagem += '📂 Categoria: *' + tipo + '*\n';
+                
+                if (isVisita) {
+                  mensagem += '👤 Visitante: *' + data.nome + '*\n';
+                  mensagem += '📝 Assunto: *' + data.assunto + '*\n';
+                  mensagem += '\nPara mais detalhes acesse o item *Visitas Portaria* no menu principal do portal Gestão Portaria.\n';
+                } else if (isRetira) {
+                  mensagem += '\nPara mais detalhes acesse o portal *Gestão Portaria* e selecione o item *Retiras Portaria* no menu principal.\n';
+                }
+                
+                mensagem += '\nNão é necessário responder essa mensagem, Obrigado!';
+                
+                var notifData = {
+                  mensagem: mensagem,
+                  responsavel: 'Portaria',
+                  telefone: '41992008176',
+                  agendamento_id: resp.id
+                };
+                
+                console.log('Enviando mensagem geral:', notifData);
+                
+                fetch('/notificacoes', {
+                  method: 'POST',
+                  credentials: 'same-origin',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(notifData)
+                }).then(r => {
+                  console.log('Resposta notificação:', r.status);
+                  return r.json();
+                }).then(resp => {
+                  console.log('Resposta notificação JSON:', resp);
+                }).catch(err => {
+                  console.error('Erro ao enviar notificação geral:', err);
+                });
+              }
+              
+              var tipoAtual = data.tipo_outro && data.tipo_outro.trim() ? data.tipo_outro : data.tipo;
+              var entrevistaUnica = document.getElementById('entrevistaUnica') && document.getElementById('entrevistaUnica').checked;
+              var enviarAvisoResponsavel = responsavelObj && tipoAtual === 'Entrevista' && entrevistaUnica;
+              
+              if (enviarAvisoResponsavel) {
+                function calcularTempoRestante(dataHora) {
+                  try {
+                    var dtAgenda = new Date(dataHora);
+                    var agora = new Date();
+                    var diffMs = dtAgenda - agora;
+                    
+                    if (diffMs <= 0) return ' (PASSOU)';
+                    
+                    var diffMinutos = Math.floor(diffMs / 60000);
+                    var diffHoras = Math.floor(diffMinutos / 60);
+                    var diffDias = Math.floor(diffHoras / 24);
+                    
+                    var tempoRestante = '';
+                    if (diffDias > 0) {
+                      tempoRestante += diffDias + ' dia' + (diffDias > 1 ? 's' : '');
+                    }
+                    
+                    var horasRestantes = diffHoras % 24;
+                    if (horasRestantes > 0) {
+                      if (tempoRestante) tempoRestante += ', ';
+                      tempoRestante += horasRestantes + ' hora' + (horasRestantes > 1 ? 's' : '');
+                    }
+                    
+                    var minutosRestantes = diffMinutos % 60;
+                    if (minutosRestantes > 0 && diffDias === 0) {
+                      if (tempoRestante) tempoRestante += ', ';
+                      tempoRestante += minutosRestantes + ' minuto' + (minutosRestantes > 1 ? 's' : '');
+                    }
+                    
+                    return tempoRestante ? ' (Faltam: ' + tempoRestante + ')' : '';
+                  } catch(e) {
+                    return '';
+                  }
+                }
+                
+                var responsavelNome = responsavelObj.raNome || responsavelObj.nome || 'Responsável';
+                var mensagem = '⚠️ *AVISO - ' + tipoAtual.toUpperCase() + '* ⚠️\n\n';
+                mensagem += 'Olá ' + responsavelNome + ',\n\n';
+                mensagem += 'Você foi designado para: *' + tipoAtual + '* com *' + data.nome + '*';
+                
+                try {
+                  var dt = new Date(data.data_hora);
+                  var dia = dt.getDate().toString().padStart(2, '0');
+                  var mes = (dt.getMonth() + 1).toString().padStart(2, '0');
+                  var ano = dt.getFullYear();
+                  var hh = dt.getHours().toString().padStart(2, '0');
+                  var mm = dt.getMinutes().toString().padStart(2, '0');
+                  var tempoRest = calcularTempoRestante(data.data_hora);
+                  mensagem += '\n\n📅 Data: *' + dia + '/' + mes + '/' + ano + ' às ' + hh + ':' + mm + '*' + tempoRest;
+                } catch(e) {
+                  mensagem += '\n\n📅 Data: *' + data.data_hora + '*';
+                }
+                
+                if (data.assunto && data.assunto.trim()) {
+                  mensagem += '\n📝 Assunto: *' + data.assunto + '*';
+                }
+                
+                mensagem += '\n\nNão é necessário responder essa mensagem, Obrigado!';
+                
+                const notifData = {
+                  mensagem: mensagem,
+                  responsavel: responsavelObj.raNome,
+                  telefone: responsavelObj.raNumCelu,
+                  assunto: data.assunto,
+                  agendamentos_ids: [resp.id]
+                };
+                console.log('DEBUG agendamento.ejs - Enviando aviso com:', notifData);
+                console.log('DEBUG agendamento.ejs - resp.id:', resp.id, 'tipo:', typeof resp.id);
+                fetch('/notificacoes', {
+                  method: 'POST',
+                  credentials: 'same-origin',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(notifData)
+                }).then(r => r.json()).then(resp2 => {
+                  console.log('DEBUG agendamento.ejs - Resposta do /notificacoes:', resp2);
+                  if (resp2 && resp2.success) {
+                    var checkboxEnviado = document.querySelector('.entrevista-checkbox[data-id="' + resp.id + '"]');
+                    if (checkboxEnviado) {
+                      checkboxEnviado.checked = true;
+                      checkboxEnviado.disabled = true;
+                      checkboxEnviado.classList.add('entrevista-checkbox-enviada');
+                    }
+                  }
+                  enviarMensagemGeral();
+                  setTimeout(function() { location.reload(); }, 1000);
+                }).catch(err => {
+                  console.error('Erro ao enviar notificação:', err);
+                  enviarMensagemGeral();
+                  setTimeout(function() { location.reload(); }, 1000);
+                });
+              } else {
+                enviarMensagemGeral();
+                setTimeout(function() { location.reload(); }, 1500);
+              }
             } else {
-              alert('Erro ao salvar: ' + (resp && resp.message || 'Erro'));
+              console.error('Erro na resposta:', resp);
+              alert('Erro ao salvar: ' + (resp && resp.message || 'Erro desconhecido'));
             }
-          }).catch(err => { console.error(err); alert('Erro ao salvar'); });
+          }).catch(err => { 
+            console.error('Erro na requisição:', err);
+            alert('Erro ao salvar: ' + err.message); 
+          });
         });
 
         try {
@@ -469,6 +902,236 @@
             });
           }
         } catch(_){ }
+
+        document.querySelectorAll('.entrevista-checkbox').forEach(function(cb){
+          cb.addEventListener('change', tokenToggleBotaoEnviar);
+        });
+
+        function tokenToggleBotaoEnviar(){
+          toggleBotaoEnviar();
+        }
+
+        function toggleBotaoEnviar(){
+          var checkedCount = 0;
+          document.querySelectorAll('.entrevista-checkbox:checked').forEach(function(cb){
+            if (!cb.disabled) {
+              checkedCount++;
+            }
+          });
+          document.getElementById('btnEnviarResponsavel').style.display = checkedCount > 0 ? 'inline-block' : 'none';
+        }
+
+        document.getElementById('btnEnviarResponsavel').addEventListener('click', function(){
+          var checkedBoxes = [];
+          document.querySelectorAll('.entrevista-checkbox:checked').forEach(function(cb){
+            if (!cb.disabled) {
+              checkedBoxes.push(cb);
+            }
+          });
+          if (!checkedBoxes.length) {
+            alert('Selecione pelo menos um agendamento para enviar');
+            return;
+          }
+
+          var agendamentos = [];
+          var responsavelUnico = null;
+          var datas = [];
+
+          checkedBoxes.forEach(function(cb){
+            var id = cb.getAttribute('data-id');
+            var responsavel = cb.getAttribute('data-responsavel');
+            var nome = cb.getAttribute('data-nome');
+            var data = cb.getAttribute('data-data');
+
+            agendamentos.push({ id: id, nome: nome, data: data });
+            datas.push(data);
+
+            try {
+              if (responsavel && typeof responsavel === 'string') {
+                if (responsavel.trim().startsWith('{')) {
+                  responsavel = JSON.parse(responsavel);
+                } else {
+                  responsavel = { raNome: responsavel };
+                }
+              }
+              if (!responsavelUnico && responsavel) {
+                responsavelUnico = responsavel;
+              }
+            } catch(e){
+              console.error('Erro ao parse responsavel', e);
+            }
+          });
+
+          if (!responsavelUnico) {
+            alert('Erro ao identificar o responsável');
+            return;
+          }
+          var listaHtml = '';
+          agendamentos.forEach(function(ag){
+            var dataFormatada = '';
+            try {
+              var dt = new Date(ag.data);
+              if (!isNaN(dt)) {
+                var dia = dt.getDate().toString().padStart(2, '0');
+                var mes = (dt.getMonth() + 1).toString().padStart(2, '0');
+                var ano = dt.getFullYear();
+                var hh = dt.getHours().toString().padStart(2, '0');
+                var mm = dt.getMinutes().toString().padStart(2, '0');
+                dataFormatada = dia + '/' + mes + '/' + ano + ' às ' + hh + ':' + mm;
+              }
+            } catch(e){
+              dataFormatada = ag.data;
+            }
+            listaHtml += '<div style="padding:8px;border-bottom:1px solid #ddd;"><strong>' + ag.nome + '</strong><br><small style="color:#666;">' + dataFormatada + '</small></div>';
+          });
+
+          document.getElementById('entrevistaListaConfirmacao').innerHTML = listaHtml;
+          window.entrevistaDataParaEnvio = {
+            agendamentos: agendamentos,
+            responsavelUnico: responsavelUnico
+          };
+          var confirmModal = new bootstrap.Modal(document.getElementById('confirmEnviarEntrevistaModal'));
+          confirmModal.show();
+        });
+
+        document.getElementById('confirmEnviarEntrevista').addEventListener('click', function(){
+          var dataEnvio = window.entrevistaDataParaEnvio;
+          if (!dataEnvio || !dataEnvio.agendamentos || !dataEnvio.agendamentos.length) {
+            alert('Erro: dados não disponíveis');
+            return;
+          }
+
+          var agendamentos = dataEnvio.agendamentos;
+          var responsavelUnico = dataEnvio.responsavelUnico;
+          var datas = agendamentos.map(function(a){ return a.data; });
+          var nomes = agendamentos.map(function(a){ return a.nome; }).join(', ');
+          var responsavelNome = responsavelUnico.raNome || responsavelUnico.nome || 'Responsável';
+          var mensagem = '⚠️ *AVISO - ENTREVISTA* ⚠️\n\n';
+          mensagem += 'Olá ' + responsavelNome + ',\n\n';
+          mensagem += 'Você foi marcado para entrevista com: *' + nomes + '*';
+          function calcularTempoRestante(dataHora) {
+            try {
+              var dtEntrevista = new Date(dataHora);
+              var agora = new Date();
+              var diffMs = dtEntrevista - agora;
+              
+              if (diffMs <= 0) return ' (ENTREVISTA PASSOU)';
+              
+              var diffMinutos = Math.floor(diffMs / 60000);
+              var diffHoras = Math.floor(diffMinutos / 60);
+              var diffDias = Math.floor(diffHoras / 24);
+              
+              var tempoRestante = '';
+              if (diffDias > 0) {
+                tempoRestante += diffDias + ' dia' + (diffDias > 1 ? 's' : '');
+              }
+              
+              var horasRestantes = diffHoras % 24;
+              if (horasRestantes > 0) {
+                if (tempoRestante) tempoRestante += ', ';
+                tempoRestante += horasRestantes + ' hora' + (horasRestantes > 1 ? 's' : '');
+              }
+              
+              var minutosRestantes = diffMinutos % 60;
+              if (minutosRestantes > 0 && diffDias === 0) {
+                if (tempoRestante) tempoRestante += ', ';
+                tempoRestante += minutosRestantes + ' minuto' + (minutosRestantes > 1 ? 's' : '');
+              }
+              
+              return tempoRestante ? ' (Faltam: ' + tempoRestante + ')' : '';
+            } catch(e) {
+              return '';
+            }
+          }
+          var datasUnique = Array.from(new Set(datas.map(function(d){
+            try {
+              var dt = new Date(d);
+              return dt.toISOString().split('T')[0];
+            } catch(e){
+              return d;
+            }
+          })));
+
+          datasUnique.sort();
+
+          if (datasUnique.length === 1) {
+            try {
+              var dt = new Date(datas[0]);
+              var dia = dt.getDate().toString().padStart(2, '0');
+              var mes = (dt.getMonth() + 1).toString().padStart(2, '0');
+              var ano = dt.getFullYear();
+              var hh = dt.getHours().toString().padStart(2, '0');
+              var mm = dt.getMinutes().toString().padStart(2, '0');
+              var tempoRest = calcularTempoRestante(datas[0]);
+              mensagem += '\n\n📅 Data: *' + dia + '/' + mes + '/' + ano + ' às ' + hh + ':' + mm + '*' + tempoRest;
+            } catch(e){
+              mensagem += '\n\n📅 Data: *' + datasUnique[0] + '*';
+            }
+          } else if (datasUnique.length > 1) {
+            try {
+              var dtPrim = new Date(datas[0]);
+              var dtUlt = new Date(datas[datas.length - 1]);
+              var dia1 = dtPrim.getDate().toString().padStart(2, '0');
+              var mes1 = (dtPrim.getMonth() + 1).toString().padStart(2, '0');
+              var ano1 = dtPrim.getFullYear();
+              var hh1 = dtPrim.getHours().toString().padStart(2, '0');
+              var mm1 = dtPrim.getMinutes().toString().padStart(2, '0');
+              var dia2 = dtUlt.getDate().toString().padStart(2, '0');
+              var mes2 = (dtUlt.getMonth() + 1).toString().padStart(2, '0');
+              var ano2 = dtUlt.getFullYear();
+              var hh2 = dtUlt.getHours().toString().padStart(2, '0');
+              var mm2 = dtUlt.getMinutes().toString().padStart(2, '0');
+              mensagem += '\n\n📅 Período: *' + dia1 + '/' + mes1 + '/' + ano1 + ' às ' + hh1 + ':' + mm1 + ' até ' + dia2 + '/' + mes2 + '/' + ano2 + ' às ' + hh2 + ':' + mm2 + '*';
+            } catch(e){
+              mensagem += '\n\n📅 Período: *' + datasUnique[0] + ' até ' + datasUnique[datasUnique.length - 1] + '*';
+            }
+          }
+          
+          var notifData = {
+            mensagem: mensagem,
+            responsavel: responsavelUnico.raNome,
+            telefone: responsavelUnico.raNumCelu,
+            agendamentos_ids: agendamentos.map(function(a){ return a.id; })
+          };
+
+          document.getElementById('confirmEnviarEntrevista').disabled = true;
+          document.getElementById('confirmEnviarEntrevista').textContent = 'Enviando...';
+          fetch('/notificacoes', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(notifData)
+          }).then(r => r.json()).then(resp => {
+            if (resp && resp.success) {
+              var confirmModalEl = document.getElementById('confirmEnviarEntrevistaModal');
+              if (confirmModalEl) {
+                var confirmModal = bootstrap.Modal.getInstance(confirmModalEl);
+                if (confirmModal) confirmModal.hide();
+              }
+              
+              var successModal = new bootstrap.Modal(document.getElementById('successNotificacaoModal'));
+              successModal.show();
+              document.getElementById('successNotificacaoModal').addEventListener('hidden.bs.modal', function(){
+                location.reload();
+              }, { once: true });
+              document.getElementById('confirmEnviarEntrevista').disabled = false;
+              document.getElementById('confirmEnviarEntrevista').textContent = 'Enviar';
+            } else {
+              alert('Erro ao enviar notificação: ' + (resp && resp.message || 'Erro'));
+              document.getElementById('confirmEnviarEntrevista').disabled = false;
+              document.getElementById('confirmEnviarEntrevista').textContent = 'Enviar';
+            }
+          }).catch(err => {
+            console.error(err);
+            alert('Erro ao enviar notificação');
+            document.getElementById('confirmEnviarEntrevista').disabled = false;
+            document.getElementById('confirmEnviarEntrevista').textContent = 'Enviar';
+          });
+        });
+
+        $(document).on('change', '.entrevista-checkbox', function(){
+          toggleBotaoEnviar();
+        });
       });
     </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -626,6 +1289,8 @@
         var hidden = document.getElementById('responsavel');
         if (!input || !dropdown || !hidden) return;
 
+        var isSelectingItem = false;
+
         function normalizeStr(s) {
           try {
             return String(s || '')
@@ -663,10 +1328,14 @@
             li.setAttribute('data-raNumCelu', u.raNumCelu);
             li.setAttribute('data-raNome', u.raNome);
             li.style.cursor = 'pointer';
+            li.onmousedown = function(e){
+              isSelectingItem = true;
+            };
             li.onclick = function(){
               input.value = u.nome;
               hidden.value = JSON.stringify(u);
               dropdown.style.display = 'none';
+              isSelectingItem = false;
             };
             dropdown.appendChild(li);
           });
@@ -681,7 +1350,13 @@
           renderDropdown(input.value);
         });
         input.addEventListener('blur', function(){
-          setTimeout(function(){ dropdown.style.display = 'none'; }, 200);
+          var self = this;
+          setTimeout(function(){ 
+            if (!isSelectingItem) {
+              dropdown.style.display = 'none';
+            }
+            isSelectingItem = false;
+          }, 250);
         });
       })();
     </script>

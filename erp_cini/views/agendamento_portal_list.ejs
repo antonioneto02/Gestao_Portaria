@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Agendamento Portal - Listagem</title>
+    <title>Agendamento Portal</title>
     <%- include('System/headIncludes.ejs') %>
     <style>
       .top-actions { display:flex; justify-content:flex-end; align-items:center; margin-bottom:12px; }
@@ -33,6 +33,26 @@
         </div>
 
         <div class="content p-3">
+          <% var tiposSet = new Set(); var statusSet = new Set(); var usersSet = new Set(); (agendamentos||[]).forEach(function(r){ try{ if (r.tipo && String(r.tipo).trim()) tiposSet.add(String(r.tipo).trim()); if (r.status && String(r.status).trim()) statusSet.add(String(r.status).trim()); if (r.criado_por && String(r.criado_por).trim()) usersSet.add(String(r.criado_por).trim()); }catch(_){} }); %>
+          <div class="widgets-grid mb-4">
+            <div class="widget">
+              <div class="widget-content"><h3><%= agendamentos ? agendamentos.length : 0 %></h3><p>Total de Registros</p></div>
+              <div class="widget-icon primary"><i class="bi bi-list"></i></div>
+            </div>
+            <div class="widget">
+              <div class="widget-content"><h3><span id="tiposCount"><%= tiposSet.size || 0 %></span></h3><p>Tipos Distintos</p></div>
+              <div class="widget-icon danger"><i class="bi bi-tag"></i></div>
+            </div>
+            <div class="widget">
+              <div class="widget-content"><h3><span id="statusCount"><%= statusSet.size || 0 %></span></h3><p>Status Distintos</p></div>
+              <div class="widget-icon success"><i class="bi bi-check-circle"></i></div>
+            </div>
+            <div class="widget">
+              <div class="widget-content"><h3><span id="usersCount"><%= usersSet.size || 0 %></span></h3><p>Usuários</p></div>
+              <div class="widget-icon info"><i class="bi bi-person"></i></div>
+            </div>
+          </div>
+
           <div class="card">
             <div class="card-body">
               <table id="dataTable" class="table table-bordered custom-table" style="width:100%">
@@ -41,37 +61,37 @@
                     <th>ID</th>
                     <th>Tipo</th>
                     <th>Data / Hora</th>
+                    <th>Dt Chegada</th>
                     <th>Assunto</th>
+                    <th>Nome</th>
                     <th>Telefone</th>
                     <th>CPF/CNPJ</th>
-                    <th>Responsável</th>
                     <th>Observações</th>
+                    <th>Responsável</th>
                     <th>Status</th>
-                    <th>Dt Criação</th>
                     <th>Criado Por</th>
-                    <th>Nome</th>
-                    <th>Concluído Por</th>
-                    <th>Dt Chegada</th>
+                    <th>Dt Criação</th>
+                    <th>Enviou</th>
                     <th class="actions-col">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   <% if (agendamentos && agendamentos.length) { agendamentos.forEach(function(r){ %>
                     <tr>
-                      <td class="cell-tooltip"><%= r.id %></td>
-                      <td class="cell-tooltip"><%= r.tipo %></td>
+                      <td class="cell-tooltip" title="<%= r.id %>"><%= r.id %></td>
+                      <td class="cell-tooltip" title="<%= r.tipo %>"><%= r.tipo %></td>
                       <td class="cell-tooltip datetime-cell" title="<%= r.data_hora %>" data-dt="<%= r.data_hora %>"><%= r.data_hora %></td>
-                      <td class="cell-tooltip"><%= r.assunto %></td>
-                      <td class="cell-tooltip"><%= r.telefone %></td>
-                      <td class="cell-tooltip"><%= r.cpf_cnpj %></td>
-                      <td class="cell-tooltip"><%= r.responsavel %></td>
-                      <td class="cell-tooltip"><%= r.observacoes %></td>
-                      <td class="cell-tooltip status-cell <%= (r.status && String(r.status).toLowerCase().indexOf('concl')!==-1) ? 'status-concluido' : 'status-pendente' %>"><%= r.status %></td>
-                      <td class="cell-tooltip datetime-cell" title="<%= r.dt_criacao %>" data-dt="<%= r.dt_criacao %>"><%= r.dt_criacao %></td>
-                      <td class="cell-tooltip"><%= r.criado_por %></td>
-                      <td class="cell-tooltip"><%= r.nome %></td>
-                      <td class="cell-tooltip"><%= r.concluido_por %></td>
                       <td class="cell-tooltip datetime-cell" title="<%= r.dt_cheg %>" data-dt="<%= r.dt_cheg %>"><%= r.dt_cheg %></td>
+                      <td class="cell-tooltip" title="<%= r.assunto %>"><%= r.assunto %></td>
+                      <td class="cell-tooltip" title="<%= r.nome %>"><%= r.nome %></td>
+                      <td class="cell-tooltip" title="<%= r.telefone %>"><%= r.telefone %></td>
+                      <td class="cell-tooltip" title="<%= r.cpf_cnpj %>"><%= r.cpf_cnpj %></td>
+                      <td class="cell-tooltip" title="<%= r.observacoes %>"><%= r.observacoes %></td>
+                      <td class="cell-tooltip" title="<%= r.responsavel %>"><%= r.responsavel %></td>
+                      <td class="cell-tooltip" title="<%= r.status %>"><%= r.status %></td>
+                      <td class="cell-tooltip" title="<%= r.criado_por %>"><%= r.criado_por %></td>
+                      <td class="cell-tooltip datetime-cell" title="<%= r.dt_criacao %>" data-dt="<%= r.dt_criacao %>"><%= r.dt_criacao %></td>
+                      <td class="cell-tooltip" title="<%= r.enviou ? 'SIM' : 'NÃO' %>"><%= r.enviou ? 'SIM' : 'NÃO' %></td>
                       <td class="actions-col text-center">
                         <button type="button" class="btn btn-danger btn-icon-sm btn-excluir-agendamento-portal" data-id="<%= r.id %>" title="Excluir">
                           <i class="fas fa-trash"></i>
@@ -84,12 +104,21 @@
             </div>
           </div>
 
+          <div class="card mt-3 mb-4">
+            <div class="card-header">Gráficos</div>
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-6"><canvas id="chartStatus"></canvas></div>
+                <div class="col-md-6"><canvas id="chartTipo"></canvas></div>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
 
     <%- include('System/bodyIncludes.ejs') %>
-
     <div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -105,9 +134,221 @@
 
     <script>
       window.agendamentosData = <%- JSON.stringify(agendamentos || []) %>;
+      
+      function createColumnFilterWithDropdown(tableSelector, columnName, columnIndex) {
+        try {
+          var $table = $(tableSelector);
+          if (!$table || !$table.length) return;
+          
+          // First create the text input
+          var $container = $table.prev('.column-filters');
+          if (!$container.length) {
+            $container = $('<div class="column-filters mb-2 d-flex gap-2 flex-nowrap" style="overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;"></div>');
+            $table.before($container);
+          }
+          
+          var safeId = ('colfilter_' + columnName.replace(/[^a-z0-9]/gi,'_') + '_' + columnIndex);
+          var existingInput = $container.find('#' + safeId);
+          
+          // Create input if doesn't exist
+          if (!existingInput.length) {
+            var $input = $('<input type="search" class="form-control form-control-sm" placeholder="' + columnName + '" />').attr('id', safeId);
+            $input.css({ 'min-width': '200px', 'flex': '0 0 auto', 'position': 'relative' });
+            $container.append($input);
+            existingInput = $input;
+          }
+          
+          // Get unique values from column
+          var table = $table.DataTable ? $table.DataTable() : null;
+          if (!table) return;
+          
+          var uniqueValues = [];
+          try {
+            var vals = table.column(columnIndex).data().toArray();
+            vals.forEach(function(v) {
+              try {
+                var text = $('<div>').html(v).text().toString().trim();
+                if (text && uniqueValues.indexOf(text) === -1) {
+                  uniqueValues.push(text);
+                }
+              } catch(_) {}
+            });
+            uniqueValues.sort();
+          } catch(e) {
+            console.error('Erro ao extrair valores da coluna:', e);
+            return;
+          }
+          
+          // Create dropdown
+          var dropdownId = safeId + '_dropdown';
+          var existingDropdown = $container.find('#' + dropdownId);
+          if (existingDropdown.length) existingDropdown.remove();
+          
+          var $dropdown = $('<div id="' + dropdownId + '" class="dropdown-column" style="position:fixed; width:200px; background:white; border:1px solid #ccc; border-radius:4px; max-height:240px; overflow-y:auto; z-index:9999; box-shadow:0 2px 8px rgba(0,0,0,0.15); display:none;">');
+          
+          // Add clear option
+          var $clearItem = $('<div style="padding:8px 12px; cursor:pointer; background:#f8f9fa; border-bottom:1px solid #eee; color:#666; font-size:12px; font-weight:500;">— Limpar filtro —</div>');
+          $clearItem.on('click', function(){
+            existingInput.val('').trigger('input');
+            $dropdown.hide();
+          });
+          $dropdown.append($clearItem);
+          
+          // Add unique values
+          uniqueValues.forEach(function(val) {
+            var $item = $('<div style="padding:8px 12px; cursor:pointer; border-bottom:1px solid #eee; font-size:13px;">').text(val);
+            $item.on('mouseenter', function(){ $(this).css('background', '#f0f0f0'); });
+            $item.on('mouseleave', function(){ $(this).css('background', 'white'); });
+            $item.on('click', function(){
+              existingInput.val(val).trigger('input');
+              $dropdown.hide();
+            });
+            $dropdown.append($item);
+          });
+          
+          // Append to body for fixed positioning
+          $('body').append($dropdown);
+          
+          // Function to position dropdown below input
+          function positionDropdown() {
+            try {
+              var rect = existingInput[0].getBoundingClientRect();
+              $dropdown.css({
+                top: (rect.bottom + 2) + 'px',
+                left: rect.left + 'px',
+                width: rect.width + 'px'
+              });
+            } catch(e) {}
+          }
+          
+          // Toggle dropdown
+          existingInput.on('focus', function(){
+            positionDropdown();
+            $dropdown.show();
+          });
+          
+          existingInput.on('blur', function(){
+            setTimeout(function(){ $dropdown.hide(); }, 150);
+          });
+          
+          existingInput.on('click', function(){
+            positionDropdown();
+            $dropdown.show();
+          });
+          
+          // Reposition on window resize and handle scroll
+          var scrollTimeout = null;
+          $(window).on('scroll', function(){
+            $dropdown.hide();
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(function(){
+              if (existingInput.is(':focus')) {
+                positionDropdown();
+                $dropdown.show();
+              }
+            }, 150);
+          });
+          
+          $(window).on('resize', function(){
+            if ($dropdown.is(':visible')) {
+              positionDropdown();
+            }
+          });
+          
+          // Filter items as user types and connect to DataTable
+          existingInput.on('input', function(){
+            var searchTerm = $(this).val().toLowerCase();
+            $dropdown.find('div').each(function(idx){
+              if (idx === 0) return; // skip clear option
+              var text = $(this).text().toLowerCase();
+              $(this).toggle(text.indexOf(searchTerm) !== -1);
+            });
+            if (searchTerm) {
+              positionDropdown();
+              $dropdown.show();
+            }
+            
+            // Also trigger DataTable search
+            if (table && table.column) {
+              table.column(columnIndex).search($(this).val()).draw();
+            }
+          });
+          
+        } catch(e) {
+          console.error('Erro ao criar filtro com dropdown:', e);
+        }
+      }
+      
+      
+      function updateIndicators(dt) {
+        try {
+          // Get filtered data from DataTable
+          const filteredData = dt.rows({ search: 'applied' }).data().toArray();
+          
+          const tiposSet = new Set();
+          const statusSet = new Set();
+          const usersSet = new Set();
+          let totalRecords = 0;
+          
+          filteredData.forEach(function(row) {
+            try {
+              // row is an array of cell values
+              if (row[1] && String(row[1]).trim()) tiposSet.add(String(row[1]).trim()); // Tipo
+              if (row[8] && String(row[8]).trim()) statusSet.add(String(row[8]).trim()); // Status
+              if (row[10] && String(row[10]).trim()) usersSet.add(String(row[10]).trim()); // Criado Por
+              totalRecords++;
+            } catch(_) {}
+          });
+          
+          // Update widget values
+          document.querySelectorAll('.widgets-grid .widget-content h3')[0].textContent = totalRecords;
+          document.getElementById('tiposCount').textContent = tiposSet.size || 0;
+          document.getElementById('statusCount').textContent = statusSet.size || 0;
+          document.getElementById('usersCount').textContent = usersSet.size || 0;
+        } catch(e) {
+          console.error('Erro ao atualizar indicadores:', e);
+        }
+      }
+      
       document.addEventListener('DOMContentLoaded', function(){
-        try { if (window.$ && $.fn && $.fn.DataTable) { var dt = $('#dataTable').DataTable({ autoWidth:false, dom: "<'top'<'d-flex justify-content-between'<'dt-length'l><'d-flex justify-content-end align-items-center'<'dt-search'f><'dt-buttons ms-2'B>>>>rtip", buttons:[{ extend:'excelHtml5', text:'<i class="fas fa-file-excel"></i> Excel', className:'btn btn-success btn-sm' }], lengthMenu:[[5,10,25,-1],[5,10,25,'Todos']], pageLength:10 }); try{ dt.on('draw', function(){ formatDatetimeCells('.datetime-cell'); }); }catch(_){ } }
-        } catch(e){console.error(e);} 
+        try { if (window.$ && $.fn && $.fn.DataTable) { var dt = $('#dataTable').DataTable({ autoWidth:false, dom: "<'top'<'d-flex justify-content-between'<'dt-length'l><'d-flex justify-content-end align-items-center'<'dt-search'f><'dt-buttons ms-2'B>>>>rtip", buttons:[{ extend:'excelHtml5', text:'<i class="fas fa-file-excel"></i> Excel', className:'btn btn-success btn-sm' }], lengthMenu:[[5,10,25,-1],[5,10,25,'Todos']], pageLength:10, language:{ url:'//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json' } }); 
+            window.agendamentosDataTable = dt; // Save to global for access
+            
+            try{ dt.on('draw', function(){ formatDatetimeCells('.datetime-cell'); updateIndicators(dt); }); }catch(_){ } 
+            try{ dt.on('search.dt', function(){ updateIndicators(dt); }); }catch(_){ }
+            try{ dt.on('length.dt', function(){ updateIndicators(dt); }); }catch(_){ }
+            try {
+              // Create filters with dropdowns
+              try { 
+                createColumnFilterWithDropdown('#dataTable', 'Tipo', 1);
+              } catch(_){}
+              try { 
+                createColumnFilterWithDropdown('#dataTable', 'Status', 8);
+              } catch(_){}
+              try { 
+                createColumnFilterWithDropdown('#dataTable', 'Criado Por', 10);
+              } catch(_){}
+              try{
+                var $cf = $('#dataTable').prev('.column-filters');
+                if ($cf && $cf.length) {
+                  $cf.css({ 'overflow-x': 'hidden', 'flex-wrap': 'nowrap', 'gap': '6px' });
+                  $cf.find('input').css({ 'min-width': '120px', 'width': 'auto', 'flex': '0 0 auto' });
+                  // Update indicators when column filters change
+                  $cf.find('input').on('change keyup', function(){ 
+                    if (window.agendamentosDataTable) {
+                      updateIndicators(window.agendamentosDataTable); 
+                    }
+                  });
+                  // Also listen to the global search input
+                  $(document).on('keyup', '.dataTables_filter input', function(){
+                    if (window.agendamentosDataTable) {
+                      updateIndicators(window.agendamentosDataTable);
+                    }
+                  });
+                }
+              }catch(_){ }
+            } catch(_){ }
+          } } catch(e){console.error(e);} 
         var deleteTargetId = null; var deleteModal = null;
         $(document).on('click', '.btn-excluir-agendamento-portal', function(){ deleteTargetId = $(this).data('id'); $('#confirmDeleteMessage').text('Confirma exclusão do registro ID ' + deleteTargetId + '?'); var el = document.getElementById('confirmDeleteModal'); try { deleteModal = new bootstrap.Modal(el); deleteModal.show(); } catch(e){ $('#confirmDeleteModal').modal('show'); } });
         $('#confirmDeleteBtn').on('click', function(){ var id = deleteTargetId; if (!id) return; var $btn = $(this); $btn.prop('disabled', true).text('Excluindo...'); fetch('/agendamento-portal/delete', { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: id }) }).then(function(r){ return r.json(); }).then(function(resp){ if (resp && resp.success) { try { if (deleteModal) deleteModal.hide(); else $('#confirmDeleteModal').modal('hide'); } catch(_){ $('#confirmDeleteModal').modal('hide'); } location.reload(); } else { alert('Erro ao excluir'); } }).catch(function(err){ console.error(err); alert('Erro ao excluir'); }).finally(function(){ $btn.prop('disabled', false).text('Excluir'); }); });
@@ -124,11 +365,21 @@
               }
               td.textContent = formatted;
               td.setAttribute('title', formatted);
+              if (typeof raw === 'string' && raw.length) td.setAttribute('data-order', raw);
             }catch(_){ }
           });
         }
         try{ formatDatetimeCells('.datetime-cell'); }catch(_){ }
+        try {
+          const ags = window.agendamentosData || [];
+          const statusCounts = {}; const tipoCounts = {};
+          ags.forEach(function(r){ var st = (r.status||'Pendente'); statusCounts[st] = (statusCounts[st]||0)+1; var tp = (r.tipo||'Outro'); tipoCounts[tp] = (tipoCounts[tp]||0)+1; });
+          function mkChart(id,type,labels,data){ var el = document.getElementById(id); if(!el) return; new Chart(el,{ type:type, data:{ labels:labels, datasets:[{ label:'', data:data, backgroundColor: labels.map((_,i)=>['#007bff','#28a745','#ffc107','#dc3545'][i%4]) }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} } }); }
+          mkChart('chartStatus','doughnut',Object.keys(statusCounts), Object.keys(statusCounts).map(k=>statusCounts[k]));
+          mkChart('chartTipo','bar',Object.keys(tipoCounts), Object.keys(tipoCounts).map(k=>tipoCounts[k]));
+        } catch(e){}
       });
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   </body>
 </html>

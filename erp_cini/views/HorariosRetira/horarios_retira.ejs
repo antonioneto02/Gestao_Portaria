@@ -35,6 +35,9 @@
       .reservation-block { padding:6px; border-radius:4px; margin-bottom:4px; cursor: pointer; }
       .reservation-block:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.08); transform: translateY(-1px); }
       .reservation-block.hovered { box-shadow: 0 4px 10px rgba(0,0,0,0.12); transform: translateY(-2px); }
+      /* Estilo para registros concluídos */
+      .reservation-block.status-concluido { background:#d3d3d3 !important; color:#666 !important; opacity:0.7; }
+      .reservation-block.status-concluido:hover { opacity:0.85; }
     </style>
   </head>
   <body>
@@ -79,7 +82,7 @@
                       <th style="width:36px" class="text-center align-middle"><button type="button" id="prevDays" class="btn btn-sm btn-outline-secondary" title="Anterior">←</button></th>
                       <% days.forEach(function(d){ %>
                         <% const _p = (d.isoDate||'').split('-'); const _disp = (_p[2]||'') + '/' + (_p[1]||'') + '/' + (_p[0]||''); %>
-                        <th class="day-header"><%= d.label %><br/><small><%= _disp %></small></th>
+                        <th class="day-header" data-iso="<%= d.isoDate %>"><!-- label filled by client --></th>
                       <% }) %>
                       <th style="width:36px" class="text-center align-middle"><button type="button" id="nextDays" class="btn btn-sm btn-outline-secondary" title="Próximo">→</button></th>
                     </tr>
@@ -96,8 +99,10 @@
                         %>
                           <td class="hour-cell day-cell <%= reservedClass %>" data-dt="<%= slotIso %>">
                             <% if (rArr && rArr.length) { %>
-                              <% rArr.forEach(function(rr, idx){ %>
-                                  <div class="reservation-block <%= idx===0 ? 'reserved-block' : '' %>" data-idx="<%= idx %>">
+                              <% rArr.forEach(function(rr, idx){ 
+                                   const statusCls = (rr.status && (rr.status.toString().toLowerCase().indexOf('conclu') !== -1)) ? 'status-concluido' : '';
+                              %>
+                                  <div class="reservation-block <%= idx===0 ? 'reserved-block' : '' %> <%= statusCls %>" data-idx="<%= idx %>">
                                     <div><strong><%= rr.cliente_nome || rr.nome_cli || '' %></strong></div>
                                     <div>Pedido: <strong><%= rr.pedido || '' %></strong> <%= (rr.NF || rr.nf) ? ' — NF: ' + (rr.NF || rr.nf) : '' %> — Categoria: <strong><%= (rr.categoria || '').toUpperCase() %></strong></div>
                                   </div>
@@ -197,8 +202,28 @@
     </div>
 
         <%- include('../System/bodyIncludes.ejs') %>
-    <script>
-      const reservations = <%- JSON.stringify(reservations || []) %>;
+        <script>
+          (function fillDayHeaders(){
+            try {
+              const dowNames = ['DOM.','SEG.','TER.','QUA.','QUI.','SEX.','SÁB.'];
+              document.querySelectorAll('.day-header[data-iso]').forEach(function(th){
+                try {
+                  const iso = th.getAttribute('data-iso') || '';
+                  const parts = iso.split('-');
+                  if (parts.length !== 3) { th.innerHTML = iso; return; }
+                  const y = parseInt(parts[0],10) || 0;
+                  const m = parseInt(parts[1],10) || 1;
+                  const d = parseInt(parts[2],10) || 1;
+                  const dt = new Date(y, m-1, d);
+                  const dow = dowNames[dt.getDay()];
+                  const disp = String(parts[2]).padStart(2,'0') + '/' + String(parts[1]).padStart(2,'0') + '/' + parts[0];
+                  th.innerHTML = dow + '<br/><small>' + disp + '</small>';
+                } catch(e) {}
+              });
+            } catch(e) {}
+          })();
+
+          const reservations = <%- JSON.stringify(reservations || []) %>;
       const reservationsMapClient = {};
       (reservations||[]).forEach(r => {
         try {
@@ -213,7 +238,12 @@
           const hh = (timePart[0] || '00').padStart(2, '0');
           const iso = y + '-' + m + '-' + d + ' ' + hh + ':00:00';
           if (!reservationsMapClient[iso]) reservationsMapClient[iso] = [];
-          reservationsMapClient[iso].push(r);
+          const alreadyMapped = reservationsMapClient[iso].some(existing => 
+            existing.id === r.id || (existing.pedido === r.pedido && existing.data === r.data)
+          );
+          if (!alreadyMapped) {
+            reservationsMapClient[iso].push(r);
+          }
         } catch (e) {}
       });
 
@@ -241,8 +271,12 @@
           // apply same color class to all reservation blocks inside the cell
           const blocks = td.querySelectorAll('.reservation-block');
           const classes = ['slot-gray','slot-red','slot-yellow','slot-green','slot-upcoming'];
-          // clear existing classes on all blocks
-          blocks.forEach(b => { classes.forEach(c => b.classList.remove(c)); });
+          // clear existing classes on all blocks EXCEPT those marked as concluded
+          blocks.forEach(b => { 
+            if (!b.classList.contains('status-concluido')) {
+              classes.forEach(c => b.classList.remove(c)); 
+            }
+          });
           const rArr = reservationsMapClient[slotIso];
           const r = Array.isArray(rArr) ? (rArr[0] || null) : rArr;
           if (!r || !blocks.length) return;
@@ -263,7 +297,12 @@
           } else if (dayDiff <= 7) {
             colorClass = 'slot-green';
           }
-          blocks.forEach(b => b.classList.add(colorClass));
+          blocks.forEach(b => { 
+            // Don't apply color class to concluded items
+            if (!b.classList.contains('status-concluido')) {
+              b.classList.add(colorClass); 
+            }
+          });
         } catch(e) {}
       }
 
@@ -374,6 +413,40 @@
             const slotIso = currentDt;
             if (!reservationsMapClient[slotIso]) reservationsMapClient[slotIso] = [];
             reservationsMapClient[slotIso].push(rsv);
+            
+            // Enviar mensagem de AGENDAMENTO CRIADO para o número fixo
+            try {
+              const categoria = (rsv.categoria || 'Retira').toString();
+              const nomeCliente = displayName || rsv.cliente_nome || rsv.nome_cli || '';
+              const assunto = pedidoVal || rsv.pedido || '';
+              
+              var msg = '📌 *AGENDAMENTO CRIADO*\n\n';
+              msg += 'Um novo agendamento foi criado no portal *Gestão Portaria*\n\n';
+              msg += '📂 Categoria: *' + categoria + '*\n';
+              msg += '\nPara mais detalhes acesse o portal *Gestão Portaria* e selecione o item *Retiras Portaria* no menu principal.\n';
+              msg += '\nNão é necessário responder essa mensagem, Obrigado!';
+              
+              const notifPayload = {
+                mensagem: msg,
+                responsavel: 'PORTARIA',
+                telefone: '41992008176',
+                assunto: assunto
+              };
+              
+              fetch('/notificacoes', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(notifPayload)
+              }).then(r => r.json()).then(respNotif => {
+                console.log('DEBUG: Mensagem de agendamento enviada:', respNotif);
+              }).catch(err => {
+                console.error('Erro ao enviar mensagem de agendamento:', err);
+              });
+            } catch(eMsg) {
+              console.error('Erro ao preparar mensagem:', eMsg);
+            }
+            
             try { renderDays(); } catch(e) { location.reload(); }
             // clear attachment UI after successful booking
             try {
@@ -523,9 +596,15 @@
       function pad(n){ return String(n).padStart(2,'0'); }
       function computeDayIsos(offset){
         return clientDays.map(d => {
-          const dt = new Date(d.isoDate);
-          dt.setDate(dt.getDate() + offset);
-          return dt.getFullYear() + '-' + pad(dt.getMonth()+1) + '-' + pad(dt.getDate());
+          try {
+            const parts = String(d.isoDate || '').split('-');
+            const y = parseInt(parts[0],10) || 0;
+            const m = parseInt(parts[1],10) || 1;
+            const dd = parseInt(parts[2],10) || 1;
+            const dt = new Date(y, m-1, dd);
+            dt.setDate(dt.getDate() + offset);
+            return dt.getFullYear() + '-' + pad(dt.getMonth()+1) + '-' + pad(dt.getDate());
+          } catch(e) { return d.isoDate; }
         });
       }
 
@@ -534,11 +613,18 @@
         const dayIsos = computeDayIsos(dayOffset);
         dayHeaders.forEach((th, idx) => {
           const iso = dayIsos[idx];
-          const d = new Date(iso);
-          const label = d.toLocaleDateString('pt-BR', { weekday: 'short' });
-          const parts = (iso || '').split('-');
-          const disp = (parts[2] || '') + '/' + (parts[1] || '') + '/' + (parts[0] || '');
-          th.innerHTML = label + '<br/><small>' + disp + '</small>';
+          try {
+            const parts = (iso || '').split('-');
+            const yy = parseInt(parts[0],10) || 0;
+            const mm = parseInt(parts[1],10) || 1;
+            const dd = parseInt(parts[2],10) || 1;
+            const dObj = new Date(yy, mm-1, dd);
+            const label = dObj.toLocaleDateString('pt-BR', { weekday: 'short' });
+            const disp = String(dd).padStart(2,'0') + '/' + String(mm).padStart(2,'0') + '/' + String(yy);
+            th.innerHTML = label + '<br/><small>' + disp + '</small>';
+          } catch(e) {
+            th.innerHTML = iso;
+          }
         });
 
         const rows = document.querySelectorAll('.calendar tbody tr');
@@ -551,19 +637,31 @@
             const slotIso = dayIso + ' ' + hh + ':00:00';
             const td = tds[j];
             const rArr = reservationsMapClient[slotIso] ? reservationsMapClient[slotIso] : [];
+            // Remove duplicates from rArr based on pedido and data
+            const uniqueRArr = [];
+            const seenKeys = new Set();
+            for (let k = 0; k < rArr.length; k++) {
+              const r = rArr[k];
+              const key = (r.pedido || '') + '|' + (r.data || '');
+              if (!seenKeys.has(key)) {
+                seenKeys.add(key);
+                uniqueRArr.push(r);
+              }
+            }
             td.setAttribute('data-dt', slotIso);
             td.classList.remove('reserved','slot-gray','slot-red','slot-yellow','slot-green','slot-upcoming');
-                if (rArr && rArr.length) {
+                if (uniqueRArr && uniqueRArr.length) {
                 td.classList.add('has-reservations');
                 let html = '';
-                for (let k=0;k<rArr.length;k++){
-                  const rr = rArr[k];
+                for (let k=0;k<uniqueRArr.length;k++){
+                  const rr = uniqueRArr[k];
                   const nfCell = rr.NF || rr.nf || '';
-                  html += '<div class="reservation-block ' + (k===0? 'reserved-block':'') + '" data-idx="' + k + '"><div><strong>' + (rr.cliente_nome || rr.nome_cli || '') + '</strong></div>' +
+                  const statusCls = (rr.status && (rr.status.toString().toLowerCase().indexOf('conclu') !== -1)) ? ' status-concluido' : '';
+                  html += '<div class="reservation-block ' + (k===0? 'reserved-block':'') + statusCls + '" data-idx="' + k + '"><div><strong>' + (rr.cliente_nome || rr.nome_cli || '') + '</strong></div>' +
                           '<div>Pedido: <strong>' + (rr.pedido || '') + '</strong>' + (nfCell ? ' — NF: ' + nfCell : '') + ' — Categoria: <strong>' + ((rr.categoria || '').toUpperCase()) + '</strong></div></div>';
-                  if (k < rArr.length - 1) html += '<hr style="margin:4px 0;" />';
+                  if (k < uniqueRArr.length - 1) html += '<hr style="margin:4px 0;" />';
                 }
-                for (let k = rArr.length; k < 3; k++) {
+                for (let k = uniqueRArr.length; k < 3; k++) {
                   html += '<div style="margin-top:4px;"><button class="btn btn-primary btn-sm slot-btn reserve-btn" data-dt="' + slotIso + '">Disponível</button></div>';
                 }
                 td.innerHTML = html;
@@ -625,6 +723,35 @@
     </div>
 
     <script>
+      function formatDatetimeBR(val) {
+        try {
+          if (!val) return '';
+          let d = null;
+          // Trata ambos os formatos: "2026-03-03 13:37:00" e "2026-03-03T13:37:00.000Z"
+          if (typeof val === 'string') {
+            if (val.indexOf('T') !== -1) {
+              d = new Date(val);
+            } else if (val.indexOf(' ') !== -1) {
+              d = new Date(val.replace(' ', 'T'));
+            } else {
+              d = new Date(val);
+            }
+          } else {
+            d = new Date(val);
+          }
+          if (isNaN(d)) return val || '';
+          return d.toLocaleString('pt-BR', { 
+            day: '2-digit', 
+            month: '2-digit', 
+            year: 'numeric', 
+            hour: '2-digit', 
+            minute: '2-digit'
+          });
+        } catch(_) { 
+          return val || ''; 
+        }
+      }
+
       function showReservationDetailsFromTd(td) {
         try {
           if (!td) return;
@@ -642,8 +769,8 @@
                 '<div>Pedido: <strong>' + (rr.pedido || '') + '</strong>' + (nfCell ? ' — NF: ' + nfCell : '') + ' — Categoria: <strong>' + ((rr.categoria||'').toUpperCase()) + '</strong></div>' +
                 '<div>Horário: <strong>' + formatDisplayDt(slotIso || '') + '</strong></div>' +
                 '<div>Status: <strong>' + (rr.status || '') + '</strong></div>' +
-                '<div>Entrada: <strong>' + (rr.data_entrada || rr.dataentrada || '') + '</strong></div>' +
-                '<div>Saída: <strong>' + (rr.data_saida || rr.datasaida || '') + '</strong></div>' +
+                '<div>Entrada: <strong>' + formatDatetimeBR(rr.data_entrada || rr.dataentrada || '') + '</strong></div>' +
+                '<div>Saída: <strong>' + formatDatetimeBR(rr.data_saida || rr.datasaida || '') + '</strong></div>' +
                 '<div class="mt-2">Observação:</div><div class="small text-muted" style="white-space:pre-wrap">' + (rr.observacao || rr.obs || '') + '</div>' +
                 '</div>';
               parts.push(bloco);
@@ -675,8 +802,8 @@
               '<div>Pedido: <strong>' + (rr.pedido || '') + '</strong>' + (nfCell ? ' — NF: ' + nfCell : '') + ' — Categoria: <strong>' + ((rr.categoria||'').toUpperCase()) + '</strong></div>' +
               '<div>Horário: <strong>' + formatDisplayDt(slotIso || '') + '</strong></div>' +
               '<div>Status: <strong>' + (rr.status || '') + '</strong></div>' +
-              '<div>Entrada: <strong>' + (rr.data_entrada || rr.dataentrada || '') + '</strong></div>' +
-              '<div>Saída: <strong>' + (rr.data_saida || rr.datasaida || '') + '</strong></div>' +
+              '<div>Entrada: <strong>' + formatDatetimeBR(rr.data_entrada || rr.dataentrada || '') + '</strong></div>' +
+              '<div>Saída: <strong>' + formatDatetimeBR(rr.data_saida || rr.datasaida || '') + '</strong></div>' +
               '<div class="mt-2">Observação:</div><div class="small text-muted" style="white-space:pre-wrap">' + (rr.observacao || rr.obs || '') + '</div>' +
               '</div>';
             const detList = document.getElementById('detList');
@@ -691,6 +818,9 @@
 
       document.addEventListener('click', function(e){
         try {
+          // Se foi um clique no botão de reserva, ignora e deixa o handler de reserve-btn processar
+          if (e.target.classList && e.target.classList.contains('reserve-btn')) return;
+          
           const block = e.target.closest && e.target.closest('.reservation-block');
           if (block) { showReservationDetailsFromBlock(block); return; }
           const td = e.target.closest && e.target.closest('td[data-dt]');
@@ -701,6 +831,7 @@
       });
       document.addEventListener('mousedown', function(e){
         try {
+          if (e.target.classList && e.target.classList.contains('reserve-btn')) return;
           const block = e.target.closest && e.target.closest('.reservation-block');
           if (block) { showReservationDetailsFromBlock(block); return; }
           const td = e.target.closest && e.target.closest('td[data-dt]');

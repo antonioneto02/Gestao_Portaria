@@ -1,6 +1,8 @@
 document.addEventListener('DOMContentLoaded', function() {
-    const isHomePage = window.location.pathname === '/' || window.location.pathname === '';
-    if (isHomePage) {
+    const path = (window.location.pathname || '').toLowerCase();
+    const isHomePage = path === '/' || path === '';
+    const isLoginPage = path === '/login' || path.startsWith('/login/') || path.includes('/login');
+    if (isHomePage || isLoginPage) {
         return;
     }
     

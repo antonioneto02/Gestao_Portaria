@@ -35,6 +35,39 @@ async function getAll() {
   }
 }
 
+async function getPending() {
+  try {
+    const pool = await new sql.ConnectionPool(dbDw).connect();
+    try {
+      const q = `SELECT * FROM [dw].[dbo].[AGENDAMENTO_PORTAL] WHERE status = 'Pendente' ORDER BY data_hora ASC`;
+      const r = await pool.request().query(q);
+      const rows = r.recordset || [];
+      const normalized = rows.map(row => {
+        const copy = Object.assign({}, row);
+        for (const k in copy) {
+            if (copy[k] instanceof Date) {
+              const d = copy[k];
+              const Y = d.getFullYear();
+              const M = String(d.getMonth() + 1).padStart(2, '0');
+              const D = String(d.getDate()).padStart(2, '0');
+              const h = String(d.getHours()).padStart(2, '0');
+              const m = String(d.getMinutes()).padStart(2, '0');
+              const s = String(d.getSeconds()).padStart(2, '0');
+              copy[k] = `${Y}-${M}-${D} ${h}:${m}:${s}`;
+          }
+        }
+        return copy;
+      });
+      return normalized;
+    } finally {
+      try { await pool.close(); } catch(_){ }
+    }
+  } catch (err) {
+    console.error('agendamentoModel.getPending error:', err && err.message ? err.message : err);
+    throw err;
+  }
+}
+
 async function getToday() {
   try {
     const pool = await new sql.ConnectionPool(dbDw).connect();
@@ -214,6 +247,7 @@ async function updateStatus(id, status, marcadoPor, telefone, cpf_cnpj, dt_cheg)
 module.exports = {
   getAll,
   getToday,
+  getPending,
   insert,
   updateStatus
 };

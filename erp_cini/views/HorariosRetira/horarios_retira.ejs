@@ -7,7 +7,6 @@
       .calendar { width:100%; border-collapse:collapse; font-size:11px; }
       .calendar th, .calendar td { border:1px solid #ddd; padding:2px 3px; text-align:center; }
       .hour-cell { height:30px; vertical-align:middle; }
-      /* reservation block background (applies only to the top reservation in the slot) */
       .reservation-block.reserved-block { background:#e6ffe6; padding:6px; border-radius:4px; }
       .result-row { padding:6px;border-bottom:1px solid #eee; cursor:pointer; }
       .slot-btn { width:100%; padding:1px 6px; font-size:10px; line-height:1.0; }
@@ -35,9 +34,19 @@
       .reservation-block { padding:6px; border-radius:4px; margin-bottom:4px; cursor: pointer; }
       .reservation-block:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.08); transform: translateY(-1px); }
       .reservation-block.hovered { box-shadow: 0 4px 10px rgba(0,0,0,0.12); transform: translateY(-2px); }
-      /* Estilo para registros concluídos */
       .reservation-block.status-concluido { background:#d3d3d3 !important; color:#666 !important; opacity:0.7; }
       .reservation-block.status-concluido:hover { opacity:0.85; }
+      #confirmAttachmentWrapper { display:flex; align-items:center; gap:8px; max-width:100%; overflow:hidden; }
+      #confirmAttachmentLabel { flex:0 0 auto; white-space:nowrap; }
+      #confirmAttachmentWrapper input#confirmAttachment { display:none; }
+      #confirmAttachmentName { display:inline-block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:0 0 110px; max-width:110px; min-width:0; }
+      #confirmAttachmentPreview { flex:0 0 120px; width:120px; height:64px; margin-left:8px; display:none; border-radius:4px; background-position:center; background-size:cover; background-repeat:no-repeat; background-color:#f5f5f5; border:1px solid #e9ecef; overflow:hidden; }
+      #confirmAttachmentPreview img { display:block; max-width:100%; max-height:100%; width:auto; height:auto; object-fit:cover; }
+      @media (max-width:480px) {
+        #confirmAttachmentName { flex:0 0 80px; max-width:80px; }
+        #confirmAttachmentPreview { flex:0 0 96px; width:96px; height:56px; }
+      }
+      #confirmBookingModal .modal-body { overflow-wrap:break-word; }
     </style>
   </head>
   <body>
@@ -82,7 +91,7 @@
                       <th style="width:36px" class="text-center align-middle"><button type="button" id="prevDays" class="btn btn-sm btn-outline-secondary" title="Anterior">←</button></th>
                       <% days.forEach(function(d){ %>
                         <% const _p = (d.isoDate||'').split('-'); const _disp = (_p[2]||'') + '/' + (_p[1]||'') + '/' + (_p[0]||''); %>
-                        <th class="day-header" data-iso="<%= d.isoDate %>"><!-- label filled by client --></th>
+                        <th class="day-header" data-iso="<%= d.isoDate %>"></th>
                       <% }) %>
                       <th style="width:36px" class="text-center align-middle"><button type="button" id="nextDays" class="btn btn-sm btn-outline-secondary" title="Próximo">→</button></th>
                     </tr>
@@ -127,11 +136,8 @@
             </div>
           </div>
         </div>
-
       </div>
     </div>
-
-    <!-- Modal Bootstrap -->
     <div class="modal fade" id="modalHorarios" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
@@ -146,7 +152,6 @@
               <button id="btnSearch" class="btn btn-primary">Buscar</button>
             </div>
             <div id="results" style="max-height:320px; overflow:auto;"></div>
-            <!-- Categoria and Observação moved to confirmation modal -->
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
@@ -268,10 +273,8 @@
       function updateSlotColor(td, slotIso) {
         try {
           if (!td) return;
-          // apply same color class to all reservation blocks inside the cell
           const blocks = td.querySelectorAll('.reservation-block');
           const classes = ['slot-gray','slot-red','slot-yellow','slot-green','slot-upcoming'];
-          // clear existing classes on all blocks EXCEPT those marked as concluded
           blocks.forEach(b => { 
             if (!b.classList.contains('status-concluido')) {
               classes.forEach(c => b.classList.remove(c)); 
@@ -298,7 +301,6 @@
             colorClass = 'slot-green';
           }
           blocks.forEach(b => { 
-            // Don't apply color class to concluded items
             if (!b.classList.contains('status-concluido')) {
               b.classList.add(colorClass); 
             }
@@ -389,7 +391,6 @@
             categoria: (document.getElementById('confirmCategoria') && document.getElementById('confirmCategoria').value) ? document.getElementById('confirmCategoria').value : null,
             observacao: (document.getElementById('confirmObservacao') && document.getElementById('confirmObservacao').value) ? document.getElementById('confirmObservacao').value : null
           };
-          // if attachment is present, send multipart to the special endpoint
           const attachEl = document.getElementById('confirmAttachment');
           let data;
           if (attachEl && attachEl.files && attachEl.files.length) {
@@ -413,8 +414,6 @@
             const slotIso = currentDt;
             if (!reservationsMapClient[slotIso]) reservationsMapClient[slotIso] = [];
             reservationsMapClient[slotIso].push(rsv);
-            
-            // Enviar mensagem de AGENDAMENTO CRIADO para o número fixo
             try {
               const categoria = (rsv.categoria || 'Retira').toString();
               const nomeCliente = displayName || rsv.cliente_nome || rsv.nome_cli || '';
@@ -439,7 +438,6 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(notifPayload)
               }).then(r => r.json()).then(respNotif => {
-                console.log('DEBUG: Mensagem de agendamento enviada:', respNotif);
               }).catch(err => {
                 console.error('Erro ao enviar mensagem de agendamento:', err);
               });
@@ -447,8 +445,7 @@
               console.error('Erro ao preparar mensagem:', eMsg);
             }
             
-            try { renderDays(); } catch(e) { location.reload(); }
-            // clear attachment UI after successful booking
+            try { await renderDays(); } catch(e) { location.reload(); }
             try {
               const sendCb = document.getElementById('confirmSendAttachment');
               const wrapper = document.getElementById('confirmAttachmentWrapper');
@@ -593,6 +590,9 @@
 
       const clientDays = <%- JSON.stringify(days || []) %>;
       let dayOffset = 0;
+      // range of data we have on the client (iso dates YYYY-MM-DD)
+      let serverDataStart = (clientDays && clientDays.length) ? clientDays[0].isoDate : null;
+      let serverDataEnd = (clientDays && clientDays.length) ? clientDays[clientDays.length-1].isoDate : null;
       function pad(n){ return String(n).padStart(2,'0'); }
       function computeDayIsos(offset){
         return clientDays.map(d => {
@@ -608,9 +608,69 @@
         });
       }
 
-      function renderDays(){
+      function isoToDate(iso) {
+        try {
+          const p = String(iso||'').split('-');
+          return new Date(parseInt(p[0],10)||0, (parseInt(p[1],10)||1)-1, parseInt(p[2],10)||1);
+        } catch(e) { return new Date(iso); }
+      }
+      function dateToIso(d) {
+        return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+      }
+      function addDaysIso(iso, delta) {
+        const d = isoToDate(iso);
+        d.setDate(d.getDate() + delta);
+        return dateToIso(d);
+      }
+      function isBeforeIso(a,b) { try { return isoToDate(a).getTime() < isoToDate(b).getTime(); } catch(e){ return false; } }
+      function isAfterIso(a,b) { try { return isoToDate(a).getTime() > isoToDate(b).getTime(); } catch(e){ return false; } }
+
+      async function fetchReservationsRange(startIso, endIso) {
+        try {
+          const res = await fetch('/horarios-retira/data', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ start: startIso, end: endIso }) });
+          const payload = await res.json();
+          if (!payload || !payload.success) return;
+          const rows = payload.data || [];
+          rows.forEach(r => {
+            try {
+              const raw = String(r.data || '');
+              const parts = raw.split(' ');
+              const datePart = parts[0] || '';
+              const timePart = (parts[1] || '00:00:00').split(':');
+              const dateSegments = datePart.split('-');
+              const y = dateSegments[0] || '';
+              const m = (dateSegments[1] || '').padStart(2,'0');
+              const dd = (dateSegments[2] || '').padStart(2,'0');
+              const hh = (timePart[0] || '00').padStart(2,'0');
+              const iso = y + '-' + m + '-' + dd + ' ' + hh + ':00:00';
+              if (!reservationsMapClient[iso]) reservationsMapClient[iso] = [];
+              const alreadyMapped = reservationsMapClient[iso].some(existing => existing.id === r.id || (existing.pedido === r.pedido && existing.data === r.data));
+              if (!alreadyMapped) reservationsMapClient[iso].push(r);
+            } catch(e){}
+          });
+        } catch(e) { console.error('Erro ao buscar reservas:', e); }
+      }
+
+      async function renderDays(){
         const dayHeaders = document.querySelectorAll('.calendar thead th.day-header');
         const dayIsos = computeDayIsos(dayOffset);
+
+        // fetch missing earlier or later ranges if needed
+        try {
+          if (serverDataStart && isBeforeIso(dayIsos[0], serverDataStart)) {
+            const missingStart = dayIsos[0];
+            const missingEnd = addDaysIso(serverDataStart, -1);
+            await fetchReservationsRange(missingStart, missingEnd);
+            serverDataStart = missingStart;
+          }
+          if (serverDataEnd && isAfterIso(dayIsos[dayIsos.length-1], serverDataEnd)) {
+            const missingStart = addDaysIso(serverDataEnd, 1);
+            const missingEnd = dayIsos[dayIsos.length-1];
+            await fetchReservationsRange(missingStart, missingEnd);
+            serverDataEnd = missingEnd;
+          }
+        } catch(e) { /* ignore fetch errors and render what we have */ }
+
         dayHeaders.forEach((th, idx) => {
           const iso = dayIsos[idx];
           try {
@@ -637,7 +697,6 @@
             const slotIso = dayIso + ' ' + hh + ':00:00';
             const td = tds[j];
             const rArr = reservationsMapClient[slotIso] ? reservationsMapClient[slotIso] : [];
-            // Remove duplicates from rArr based on pedido and data
             const uniqueRArr = [];
             const seenKeys = new Set();
             for (let k = 0; k < rArr.length; k++) {
@@ -694,13 +753,13 @@
         });
       }
 
-      document.getElementById('prevDays').addEventListener('click', function(e){ dayOffset -= 1; renderDays(); try{ e.currentTarget.blur(); }catch(_){ } });
-      document.getElementById('nextDays').addEventListener('click', function(e){ dayOffset += 1; renderDays(); try{ e.currentTarget.blur(); }catch(_){ } });
+      document.getElementById('prevDays').addEventListener('click', function(e){ dayOffset -= 1; renderDays().catch(()=>{}); try{ e.currentTarget.blur(); }catch(_){ } });
+      document.getElementById('nextDays').addEventListener('click', function(e){ dayOffset += 1; renderDays().catch(()=>{}); try{ e.currentTarget.blur(); }catch(_){ } });
       try {
         document.getElementById('prevDays').addEventListener('mousedown', function(e){ e.preventDefault(); });
         document.getElementById('nextDays').addEventListener('mousedown', function(e){ e.preventDefault(); });
       } catch(_) {}
-      renderDays();
+      renderDays().catch(()=>{});
       try { setTimeout(function(){ document.activeElement && document.activeElement.blur(); }, 0); } catch(_) { }
       const clearFilterBtn = document.getElementById('clearFilter');
       if (clearFilterBtn) clearFilterBtn.addEventListener('click', function(){ window.location.href = '/horarios-retira'; });
@@ -727,7 +786,6 @@
         try {
           if (!val) return '';
           let d = null;
-          // Trata ambos os formatos: "2026-03-03 13:37:00" e "2026-03-03T13:37:00.000Z"
           if (typeof val === 'string') {
             if (val.indexOf('T') !== -1) {
               d = new Date(val);
@@ -818,7 +876,6 @@
 
       document.addEventListener('click', function(e){
         try {
-          // Se foi um clique no botão de reserva, ignora e deixa o handler de reserve-btn processar
           if (e.target.classList && e.target.classList.contains('reserve-btn')) return;
           
           const block = e.target.closest && e.target.closest('.reservation-block');

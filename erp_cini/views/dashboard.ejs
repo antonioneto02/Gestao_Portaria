@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
   <%- include('System/headIncludes.ejs') %>
-  <title>Dashboard | ERP CINI</title>
+  <title>Dashboard | CINI</title>
   <style>
     .btn-icon-sm {
       padding: 0 !important;
@@ -367,7 +367,7 @@
           }
           
           try {
-            try { createColumnFilterWithDropdown('#agendamentosHojeTable','Tipo', 1); } catch(_){}
+            try { createColumnFilterWithDropdown('#agendamentosHojeTable','Tipo', 2); } catch(_){}
             try { createColumnFilterWithDropdown('#agendamentosHojeTable','Nome', 4); } catch(_){}
             try { createColumnFilterWithDropdown('#agendamentosHojeTable','Status', 8); } catch(_){}
             try{
@@ -378,6 +378,83 @@
               }
             }catch(_){ }
           } catch(_){ }
+          
+          // Função para atualizar indicadores baseado nos dados filtrados
+          function updateIndicatorsFromTable() {
+            try {
+              if (!todayTable) return;
+              const visibleData = todayTable.rows({ search: 'applied' }).data().toArray();
+              let total = visibleData.length;
+              let visitas = 0;
+              let prestServicos = 0;
+              let atrasados = 0;
+              let concluidos = 0;
+              let naoConcluidos = 0;
+              let pendentes = 0;
+              
+              visibleData.forEach(function(row) {
+                if (!row || !row.length) return;
+                // Coluna 2 é Tipo
+                const tipo = (row[2] || '').toString().toLowerCase();
+                if (tipo === 'visita') visitas++;
+                if (tipo.includes('prestacao') || tipo.includes('prestação')) prestServicos++;
+                
+                // Coluna 8 é Status
+                const status = (row[8] || '').toString().toLowerCase();
+                if (status.includes('conclu')) concluidos++;
+                else if (status.includes('não') || status.includes('nao')) naoConcluidos++;
+                else if (status.includes('pend')) pendentes++;
+                
+                // Verificar se está atrasado
+                const dataHora = row[1] || '';
+                try {
+                  const d = new Date(dataHora);
+                  if (!isNaN(d) && d < new Date() && status.includes('pend')) atrasados++;
+                } catch(_){}
+              });
+              
+              // Atualizar widgets (4 indicadores)
+              const widgets = document.querySelectorAll('.widgets-grid .widget-content h3');
+              if (widgets.length >= 1) widgets[0].textContent = total;
+              if (widgets.length >= 2) widgets[1].textContent = visitas;
+              if (widgets.length >= 3) widgets[2].textContent = prestServicos;
+              if (widgets.length >= 4) widgets[3].textContent = atrasados;
+              
+              // Atualizar progresso geral
+              const progressoHoje = total > 0 ? Math.round((concluidos / total) * 100) : 0;
+              const progressBar = document.querySelector('.widgets-grid').parentElement.querySelector('[style*="background:var(--primary)"]');
+              if (progressBar) {
+                progressBar.style.width = progressoHoje + '%';
+              }
+              
+              // Atualizar valores de progresso
+              const progressText = document.querySelector('.flex-between span:last-child');
+              if (progressText) progressText.textContent = progressoHoje + '%';
+              
+              // Atualizar tabela de progresso
+              const progressTable = document.querySelector('.grid-2 .card:first-child table');
+              if (progressTable) {
+                const rows = progressTable.querySelectorAll('tr');
+                if (rows.length >= 4) {
+                  rows[0].querySelector('td:last-child').textContent = concluidos;
+                  rows[1].querySelector('td:last-child').textContent = Math.max(0, pendentes);
+                  rows[2].querySelector('td:last-child').textContent = naoConcluidos;
+                  rows[3].querySelector('td:last-child').textContent = total;
+                }
+              }
+            } catch(e) { console.error('Erro ao atualizar indicadores:', e); }
+          }
+          
+          // Atualizar indicadores quando filtrar ou buscar
+          if (todayTable) {
+            todayTable.on('search.dt', updateIndicatorsFromTable);
+            todayTable.on('draw.dt', updateIndicatorsFromTable);
+            
+            // Também atualizar quando os filtros de coluna são modificados
+            $(document).on('change keyup', '.column-filters input', function() {
+              setTimeout(updateIndicatorsFromTable, 100);
+            });
+          }
         }
       } catch(e) { console.error('DataTable init error:', e); }
       try { formatDatetimeCells('.datetime-cell-hoje'); } catch(_){ }

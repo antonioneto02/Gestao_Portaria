@@ -318,7 +318,7 @@
                     </div>
                   </div>
 
-                  <div class="col-md-6 d-flex align-items-center mb-3 mt-3">
+                  <div class="col-md-4 d-flex align-items-center mb-3 mt-3">
                     <div class="form-check">
                       <input class="form-check-input" type="checkbox" value="1" id="euSouResponsavel" name="eu_sou_o_responsavel">
                       <label class="form-check-label" for="euSouResponsavel">
@@ -326,11 +326,19 @@
                       </label>
                     </div>
                   </div>
-                  <div class="col-md-6 d-flex align-items-center mb-3 mt-3 hidden-container" id="entrevistaUnicaContainer">
+                  <div class="col-md-4 d-flex align-items-center mb-3 mt-3 hidden-container" id="notificarResponsavelContainer">
                     <div class="form-check">
-                      <input class="form-check-input" type="checkbox" value="1" id="entrevistaUnica" name="entrevista_unica">
-                      <label class="form-check-label" for="entrevistaUnica">
-                        Entrevista única?
+                      <input class="form-check-input" type="checkbox" value="1" id="notificarResponsavel" name="notificar_responsavel">
+                      <label class="form-check-label" for="notificarResponsavel">
+                        Notificar responsável?
+                      </label>
+                    </div>
+                  </div>
+                  <div class="col-md-4 d-flex align-items-center mb-3 mt-3 hidden-container" id="areaDeRiscoContainer">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" value="1" id="areadeRisco" name="area_de_risco">
+                      <label class="form-check-label" for="areadeRisco">
+                        Área de Risco
                       </label>
                     </div>
                   </div>
@@ -617,33 +625,70 @@
         document.getElementById('btnNovo').addEventListener('click', function(){
           document.getElementById('formAgendamento').reset();
           document.getElementById('outroTipoContainer').style.display = 'none';
+          var euSouRespCheckbox = document.getElementById('euSouResponsavel');
+          var notificarContainer = document.getElementById('notificarResponsavelContainer');
+          if (!euSouRespCheckbox.checked && notificarContainer) {
+            notificarContainer.classList.remove('hidden-container');
+          } else if (notificarContainer) {
+            notificarContainer.classList.add('hidden-container');
+          }
+          
+          // Esconder checkbox de Área de Risco ao abrir o modal (tipo padrão é Visita)
+          var areaDeRiscoContainer = document.getElementById('areaDeRiscoContainer');
+          if (areaDeRiscoContainer) {
+            areaDeRiscoContainer.classList.add('hidden-container');
+          }
+          
           bsModal.show();
         });
 
         document.getElementById('tipo').addEventListener('change', function(e){
           if (e.target.value === 'Outro') document.getElementById('outroTipoContainer').style.display = '';
           else document.getElementById('outroTipoContainer').style.display = 'none';
-          
-          // Controlar visibilidade do checkbox Entrevista Única
-          var container = document.getElementById('entrevistaUnicaContainer');
-          if (e.target.value === 'Entrevista') {
+          var container = document.getElementById('notificarResponsavelContainer');
+          var euSouRespCheckbox = document.getElementById('euSouResponsavel');
+          if (container && !euSouRespCheckbox.checked) {
             container.classList.remove('hidden-container');
-          } else {
+          } else if (container) {
             container.classList.add('hidden-container');
-            var checkbox = document.getElementById('entrevistaUnica');
-            if (checkbox) checkbox.checked = false;
+          }
+          
+          // Mostrar/esconder checkbox de Área de Risco apenas para Prestação de Serviços
+          var areaDeRiscoContainer = document.getElementById('areaDeRiscoContainer');
+          var areaDeRiscoCheckbox = document.getElementById('areadeRisco');
+          if (e.target.value === 'Prestacao de Servicos') {
+            if (areaDeRiscoContainer) {
+              areaDeRiscoContainer.classList.remove('hidden-container');
+            }
+          } else {
+            if (areaDeRiscoContainer) {
+              areaDeRiscoContainer.classList.add('hidden-container');
+            }
+            if (areaDeRiscoCheckbox) {
+              areaDeRiscoCheckbox.checked = false;
+            }
           }
         });
 
         document.getElementById('euSouResponsavel').addEventListener('change', function(){
           var responsavelInput = document.getElementById('responsavelInput');
+          var notificarContainer = document.getElementById('notificarResponsavelContainer');
+          var notificarCheckbox = document.getElementById('notificarResponsavel');
+          
           if (this.checked) {
             responsavelInput.disabled = true;
             responsavelInput.value = '';
             document.getElementById('responsavel').value = '';
             document.getElementById('responsavelDropdown').style.display = 'none';
+            if (notificarContainer) {
+              notificarContainer.classList.add('hidden-container');
+              if (notificarCheckbox) notificarCheckbox.checked = false;
+            }
           } else {
             responsavelInput.disabled = false;
+            if (notificarContainer) {
+              notificarContainer.classList.remove('hidden-container');
+            }
           }
         });
 
@@ -657,18 +702,12 @@
           let responsavelObj = null;
           const responsavelValue = document.getElementById('responsavel').value;
           const responsavelInputValue = document.getElementById('responsavelInput').value;
-          
-          console.log('DEBUG: responsavel hidden field value:', responsavelValue);
-          console.log('DEBUG: responsavel input field value:', responsavelInputValue);
-          
           try {
             if (responsavelValue && typeof responsavelValue === 'string') {
               if (responsavelValue.trim().startsWith('{')) {
                 responsavelObj = JSON.parse(responsavelValue);
-                console.log('DEBUG: parsed responsavelObj:', responsavelObj);
               } else {
                 responsavelObj = { raNome: responsavelValue };
-                console.log('DEBUG: created raNome object:', responsavelObj);
               }
             }
           } catch (e) { 
@@ -677,10 +716,6 @@
           }
           
           const euSou = document.getElementById('euSouResponsavel') && document.getElementById('euSouResponsavel').checked;
-          
-          console.log('DEBUG: euSou:', euSou);
-          console.log('DEBUG: responsavelObj final:', responsavelObj);
-          
           if (!euSou) {
             if (!responsavelObj || !responsavelObj.raNome) {
               console.error('Validação falhou - responsavelObj:', responsavelObj, 'raNome:', responsavelObj?.raNome);
@@ -745,26 +780,22 @@
                   agendamento_id: resp.id
                 };
                 
-                console.log('Enviando mensagem geral:', notifData);
-                
                 fetch('/notificacoes', {
                   method: 'POST',
                   credentials: 'same-origin',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(notifData)
-                }).then(r => {
-                  console.log('Resposta notificação:', r.status);
+                }).then(r => {;
                   return r.json();
                 }).then(resp => {
-                  console.log('Resposta notificação JSON:', resp);
                 }).catch(err => {
                   console.error('Erro ao enviar notificação geral:', err);
                 });
               }
               
               var tipoAtual = data.tipo_outro && data.tipo_outro.trim() ? data.tipo_outro : data.tipo;
-              var entrevistaUnica = document.getElementById('entrevistaUnica') && document.getElementById('entrevistaUnica').checked;
-              var enviarAvisoResponsavel = responsavelObj && tipoAtual === 'Entrevista' && entrevistaUnica;
+              var notificarResponsavel = document.getElementById('notificarResponsavel') && document.getElementById('notificarResponsavel').checked;
+              var enviarAvisoResponsavel = responsavelObj && notificarResponsavel;
               
               if (enviarAvisoResponsavel) {
                 function calcularTempoRestante(dataHora) {
@@ -825,23 +856,28 @@
                 }
                 
                 mensagem += '\n\nNão é necessário responder essa mensagem, Obrigado!';
+
+                var telefoneResponsavel = window.obterTelefoneResponsavel(responsavelObj);
+                if (!telefoneResponsavel) {
+                  var telInput = document.getElementById('telefone');
+                  if (telInput && telInput.value) {
+                    telefoneResponsavel = telInput.value;
+                  }
+                }
                 
                 const notifData = {
                   mensagem: mensagem,
-                  responsavel: responsavelObj.raNome,
-                  telefone: responsavelObj.raNumCelu,
+                  responsavel: JSON.stringify(responsavelObj),
+                  telefone: telefoneResponsavel,
                   assunto: data.assunto,
                   agendamentos_ids: [resp.id]
                 };
-                console.log('DEBUG agendamento.ejs - Enviando aviso com:', notifData);
-                console.log('DEBUG agendamento.ejs - resp.id:', resp.id, 'tipo:', typeof resp.id);
                 fetch('/notificacoes', {
                   method: 'POST',
                   credentials: 'same-origin',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(notifData)
                 }).then(r => r.json()).then(resp2 => {
-                  console.log('DEBUG agendamento.ejs - Resposta do /notificacoes:', resp2);
                   if (resp2 && resp2.success) {
                     var checkboxEnviado = document.querySelector('.entrevista-checkbox[data-id="' + resp.id + '"]');
                     if (checkboxEnviado) {
@@ -860,6 +896,116 @@
               } else {
                 enviarMensagemGeral();
                 setTimeout(function() { location.reload(); }, 1500);
+              }
+
+              var areadeRiscoCheckbox = document.getElementById('areadeRisco') && document.getElementById('areadeRisco').checked;
+              if (areadeRiscoCheckbox) {
+                var euSouResp = document.getElementById('euSouResponsavel') && document.getElementById('euSouResponsavel').checked;
+                var responsavelNomeAreaRisco = '';
+                
+                if (euSouResp) {
+                  function obterNomeUsuarioLogado() {
+                    try {
+                      var u = window.usuarioLogado || {};
+                      var idLogado = u.id || u.RA_MAT || u.raMat || '';
+                      var nomeDireto = u.RA_NOME || u.nome || u.name || u.raNome || '';
+                      if (idLogado && Array.isArray(window.users)) {
+                        var encontrado = window.users.find(function(item){
+                          return String(item.id || '').trim() === String(idLogado).trim();
+                        });
+                        if (encontrado) {
+                          return encontrado.raNome || encontrado.nome || encontrado.RA_NOME || nomeDireto || 'Usuário';
+                        }
+                      }
+                      return nomeDireto || 'Usuário';
+                    } catch(e){
+                      return 'Usuário';
+                    }
+                  }
+                  responsavelNomeAreaRisco = obterNomeUsuarioLogado();
+                } else {
+                  responsavelNomeAreaRisco = responsavelObj ? (responsavelObj.raNome || responsavelObj.nome || 'Não definido') : 'Não definido';
+                }
+                
+                var mensagemAreaRisco = '🚨 *AVISO - PRESTADOR DE SERVIÇO DE RISCO* 🚨\n\n';
+                mensagemAreaRisco += 'Atenção: Um novo agendamento foi criado para um serviço de RISCO\n\n';
+                mensagemAreaRisco += '👤 Prestador/Contato: *' + data.nome + '*\n';
+                mensagemAreaRisco += '📋 Assunto: *' + data.assunto + '*\n';
+                
+                function calcularTempoRestanteAreaRisco(dataHora) {
+                  try {
+                    var dtAgenda = new Date(dataHora);
+                    var agora = new Date();
+                    var diffMs = dtAgenda - agora;
+                    
+                    if (diffMs <= 0) return ' (PASSOU)';
+                    
+                    var diffMinutos = Math.floor(diffMs / 60000);
+                    var diffHoras = Math.floor(diffMinutos / 60);
+                    var diffDias = Math.floor(diffHoras / 24);
+                    
+                    var tempoRestante = '';
+                    if (diffDias > 0) {
+                      tempoRestante += diffDias + ' dia' + (diffDias > 1 ? 's' : '');
+                    }
+                    
+                    var horasRestantes = diffHoras % 24;
+                    if (horasRestantes > 0) {
+                      if (tempoRestante) tempoRestante += ', ';
+                      tempoRestante += horasRestantes + ' hora' + (horasRestantes > 1 ? 's' : '');
+                    }
+                    
+                    var minutosRestantes = diffMinutos % 60;
+                    if (minutosRestantes > 0 && diffDias === 0) {
+                      if (tempoRestante) tempoRestante += ', ';
+                      tempoRestante += minutosRestantes + ' minuto' + (minutosRestantes > 1 ? 's' : '');
+                    }
+                    
+                    return tempoRestante ? ' (Faltam: ' + tempoRestante + ')' : '';
+                  } catch(e) {
+                    return '';
+                  }
+                }
+                
+                try {
+                  var dt = new Date(data.data_hora);
+                  var dia = dt.getDate().toString().padStart(2, '0');
+                  var mes = (dt.getMonth() + 1).toString().padStart(2, '0');
+                  var ano = dt.getFullYear();
+                  var hh = dt.getHours().toString().padStart(2, '0');
+                  var mm = dt.getMinutes().toString().padStart(2, '0');
+                  var tempoRest = calcularTempoRestanteAreaRisco(data.data_hora);
+                  mensagemAreaRisco += '📅 Data: *' + dia + '/' + mes + '/' + ano + ' às ' + hh + ':' + mm + '*' + tempoRest + '\n';
+                } catch(e) {
+                  mensagemAreaRisco += '📅 Data: *' + data.data_hora + '*\n';
+                }
+                
+                mensagemAreaRisco += '👔 Responsável do Agendamento: *' + responsavelNomeAreaRisco + '*\n';
+                
+                if (data.observacoes && data.observacoes.trim()) {
+                  mensagemAreaRisco += '📝 Observações: *' + data.observacoes + '*\n';
+                }
+                
+                mensagemAreaRisco += '\nFavor tomar as devidas precauções!';
+                
+                const notifDataAreaRisco = {
+                  mensagem: mensagemAreaRisco,
+                  responsavel: 'Portaria - Área de Risco',
+                  telefone: '41992008176',
+                  assunto: 'Serviço de Risco - ' + data.assunto,
+                  agendamento_id: resp.id
+                };
+                
+                fetch('/notificacoes', {
+                  method: 'POST',
+                  credentials: 'same-origin',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(notifDataAreaRisco)
+                }).then(r => r.json()).then(respAreaRisco => {
+                  console.log('Notificação Área de Risco enviada:', respAreaRisco);
+                }).catch(err => {
+                  console.error('Erro ao enviar notificação de Área de Risco:', err);
+                });
               }
             } else {
               console.error('Erro na resposta:', resp);
@@ -994,6 +1140,23 @@
           confirmModal.show();
         });
 
+        window.obterTelefoneResponsavel = function(responsavelObj) {
+          if (!responsavelObj) return '';
+          if (responsavelObj.raNumCelu) return responsavelObj.raNumCelu;
+          if (responsavelObj.telefone) return responsavelObj.telefone;
+          if (responsavelObj.celular) return responsavelObj.celular;
+          var nome = responsavelObj.raNome || responsavelObj.nome || '';
+          if (nome && window.users && Array.isArray(window.users)) {
+            for (var i = 0; i < window.users.length; i++) {
+              var u = window.users[i];
+              if ((u.raNome || u.nome || '').toLowerCase().trim() === nome.toLowerCase().trim()) {
+                return u.raNumCelu || u.telefone || u.celular || '';
+              }
+            }
+          }
+          return '';
+        };
+
         document.getElementById('confirmEnviarEntrevista').addEventListener('click', function(){
           var dataEnvio = window.entrevistaDataParaEnvio;
           if (!dataEnvio || !dataEnvio.agendamentos || !dataEnvio.agendamentos.length) {
@@ -1087,10 +1250,15 @@
             }
           }
           
+          var telefoneResponsavel = window.obterTelefoneResponsavel(responsavelUnico);
+          if (!telefoneResponsavel) {
+            var telInput = document.getElementById('telefone');
+            if (telInput && telInput.value) telefoneResponsavel = telInput.value;
+          }
           var notifData = {
             mensagem: mensagem,
-            responsavel: responsavelUnico.raNome,
-            telefone: responsavelUnico.raNumCelu,
+            responsavel: JSON.stringify(responsavelUnico),
+            telefone: telefoneResponsavel,
             agendamentos_ids: agendamentos.map(function(a){ return a.id; })
           };
 
@@ -1191,7 +1359,6 @@
         const dayData = dayKeys.map(k=>dayCounts[k]);
         function setH(id,h){ const c = document.getElementById(id); if(c) c.style.height = h + 'px'; }
         setH('chartStatus', 240); setH('chartTipo', 240); setH('chartPorDia', 220);
-
         createChart('chartStatus','doughnut',statusLabels,statusData,{label:'Status'});
         createChart('chartTipo','bar',tipoLabels,tipoData,{label:'Por Tipo', options:{ scales:{ y: { beginAtZero:true } } }});
         createChart('chartPorDia','line',dayLabels,dayData,{label:'Por Dia', options:{ scales:{ y: { beginAtZero:true } } }});
@@ -1251,12 +1418,19 @@
     <script>
       (function(){
         var users = [];
+        window.users = users;
+        <% if (typeof user !== 'undefined' && user) { %>
+          window.usuarioLogado = <%- JSON.stringify(user) %>;
+        <% } else { %>
+          window.usuarioLogado = {};
+        <% } %>
         <% if (users && users.length) { %>
           users = [
             <% users.forEach(function(u, idx, arr){ %>
               { id: <%- JSON.stringify(u.RA_MAT || '') %>, nome: <%- JSON.stringify(u.RA_NOME || '') %>, raNumCelu: <%- JSON.stringify((u.RA_DDDCELU||'') + (u.RA_NUMCELU ? String(u.RA_NUMCELU) : (u.RA_TELEFON||''))) %>, raNome: <%- JSON.stringify(u.RA_NOME || '') %> }<%= idx < arr.length-1 ? ',' : '' %>
             <% }) %>
           ];
+          window.users = users;
         <% } %>
 
         fetch('/api/responsaveis').then(async r => {
@@ -1282,6 +1456,7 @@
                 raNome: u.RA_NOME || ''
               };
             });
+            window.users = users; 
           }
         }).catch(err => { console.error('Erro ao buscar responsaveis via API:', err); });
         var input = document.getElementById('responsavelInput');
@@ -1290,7 +1465,6 @@
         if (!input || !dropdown || !hidden) return;
 
         var isSelectingItem = false;
-
         function normalizeStr(s) {
           try {
             return String(s || '')

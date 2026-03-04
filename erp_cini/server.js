@@ -121,38 +121,6 @@ async function ensureAuth(req, res, next) {
 
 app.get('/dashboard', ensureAuth, async (req, res) => {
   try {
-    let total_plans = 0;
-    let total_tasks = 0;
-    let completed_tasks = 0;
-    let overdue_tasks = 0;
-    let my_tasks = 0;
-    let total_users = 0;
-    let completion_rate = 0;
-
-    try {
-      const pool = await new sql.ConnectionPool(dbConfig).connect();
-      try {
-        const r1 = await pool.request().query("SELECT COUNT(*) AS count FROM plans WHERE status = 'active'");
-        const r2 = await pool.request().query('SELECT COUNT(*) AS count FROM tasks');
-        const r3 = await pool.request().query("SELECT COUNT(*) AS count FROM tasks WHERE status = 'Concluída'");
-        const r4 = await pool.request().query("SELECT COUNT(*) AS count FROM tasks WHERE status != 'Concluída' AND due_date < GETDATE()");
-        const userId = req.session.user_id || req.session.userID || null;
-        const r5 = userId ? await pool.request().input('uid', sql.VarChar, userId).query('SELECT COUNT(*) AS count FROM tasks WHERE responsible_id = @uid') : { recordset: [{ count: 0 }] };
-        const r6 = await pool.request().query('SELECT COUNT(*) AS count FROM users WHERE active = 1');
-
-        total_plans = (r1.recordset[0] && r1.recordset[0].count) || 0;
-        total_tasks = (r2.recordset[0] && r2.recordset[0].count) || 0;
-        completed_tasks = (r3.recordset[0] && r3.recordset[0].count) || 0;
-        overdue_tasks = (r4.recordset[0] && r4.recordset[0].count) || 0;
-        my_tasks = (r5.recordset[0] && r5.recordset[0].count) || 0;
-        total_users = (r6.recordset[0] && r6.recordset[0].count) || 0;
-        completion_rate = total_tasks > 0 ? Math.round((completed_tasks / total_tasks) * 100) : 0;
-      } finally {
-        try { await pool.close(); } catch(_){}
-      }
-    } catch (dbErr) {
-    }
-
     let agendamentosHoje = [];
     let total_agendamentos = 0;
     let count_visita = 0;
@@ -161,25 +129,27 @@ app.get('/dashboard', ensureAuth, async (req, res) => {
     try {
       const agendamentoModel = require('./models/agendamentoModel');
       agendamentosHoje = await agendamentoModel.getToday();
-      const all = await agendamentoModel.getAll();
-      total_agendamentos = all.length || 0;
-      count_visita = all.filter(a => (a.tipo || '').toString().toLowerCase() === 'visita').length;
-      count_prest_servicos = all.filter(a => {
+      
+      // Calcular indicadores apenas com dados de HOJE
+      total_agendamentos = agendamentosHoje.length || 0;
+      count_visita = agendamentosHoje.filter(a => (a.tipo || '').toString().toLowerCase() === 'visita').length;
+      count_prest_servicos = agendamentosHoje.filter(a => {
         const t = (a.tipo || '').toString().toLowerCase();
         return t === 'prestacao de servicos' || t === 'prestação de serviços' || t === 'prestador de serviços' || t === 'prestadores de serviços';
       }).length;
 
-      const todayStart = new Date();
-      todayStart.setHours(0,0,0,0);
-      agendamentosAtrasados = all.filter(a => {
+      // Agendamentos atrasados de hoje que estão pendentes
+      agendamentosAtrasados = agendamentosHoje.filter(a => {
         const raw = a.data_hora || a.dataHora || a.DataHora || '';
+        const status = (a.status || '').toString().toLowerCase();
         let d = null;
         try {
           if (typeof raw === 'string' && raw.indexOf(' ') !== -1) d = new Date(raw.replace(' ', 'T'));
           else d = new Date(raw);
         } catch(_){ d = null; }
         if (!d || isNaN(d)) return false;
-        return d < todayStart;
+        const agora = new Date();
+        return d < agora && status === 'pendente';
       });
     } catch (e) {
       console.error('Erro ao buscar agendamentos do dia/aggregates:', e && e.message ? e.message : e);
@@ -191,13 +161,6 @@ app.get('/dashboard', ensureAuth, async (req, res) => {
     }
 
     res.render('dashboard', {
-      total_plans,
-      total_tasks,
-      completed_tasks,
-      overdue_tasks,
-      my_tasks,
-      completion_rate,
-      total_users,
       agendamentosHoje,
       total_agendamentos,
       count_visita,
@@ -212,13 +175,6 @@ app.get('/dashboard', ensureAuth, async (req, res) => {
   } catch (err) {
     console.error('Erro ao renderizar dashboard:', err);
     res.render('dashboard', {
-      total_plans: 0,
-      total_tasks: 0,
-      completed_tasks: 0,
-      overdue_tasks: 0,
-      my_tasks: 0,
-      completion_rate: 0,
-      total_users: 0,
       agendamentosHoje: [],
       total_agendamentos: 0,
       count_visita: 0,
@@ -482,7 +438,10 @@ app.get('/agendamentos', ensureAuth, async (req, res) => {
   }
 
   try {
-    agendamentos = await agendamentoModel.getToday();
+    // Alterado para buscar todos os agendamentos pendentes de todas as datas
+    agendamentos = await agendamentoModel.getAll();
+    // Se quiser filtrar apenas pendentes, descomente a linha abaixo e comente a de cima:
+    // agendamentos = (await agendamentoModel.getAll()).filter(a => (a.status || '').toString().toLowerCase() === 'pendente');
   } catch (err) {
     console.error('Erro ao buscar agendamentos via model:', err && err.message ? err.message : err);
   }
@@ -1014,101 +973,7 @@ app.post('/agendamentos', ensureAuth, express.json(), async (req, res) => {
         }
       }
 
-      try {
-        if (payload.eu_sou_o_responsavel) {
-        } else {
-        const sql = require('mssql');
-        const poolDw = await new sql.ConnectionPool(dbDw).connect();
-        try {
-          let destinatario = null;
-          let responsavelNomeFinal = toInsert.responsavel || responsavelName || null;
-          if (toInsert.telefone) {
-            destinatario = String(toInsert.telefone).replace(/\D+/g, '');
-            if (destinatario === '') destinatario = null;
-          }
-          if (!destinatario && responsavelId) {
-            try {
-              const poolP = await new sql.ConnectionPool(dbProtheus).connect();
-              try {
-                const q = `SELECT RA_MAT, RA_NOME, RA_DDDCELU, RA_NUMCELU, RA_TELEFON FROM SRA010 WHERE LTRIM(RTRIM(RA_MAT)) = @mat OR RA_MAT = RIGHT('000000' + @mat,6)`;
-                const r = await poolP.request().input('mat', sql.VarChar, String(responsavelId)).query(q);
-                const userRec = (r.recordset && r.recordset[0]) ? r.recordset[0] : null;
-                if (userRec) {
-                  responsavelNomeFinal = (userRec.RA_NOME || responsavelNomeFinal || '').toString().trim();
-                  const ddd = (userRec.RA_DDDCELU || '').toString().trim();
-                  const num = (userRec.RA_NUMCELU || '').toString().trim() || (userRec.RA_TELEFON || '').toString().trim();
-                  if (ddd && num) destinatario = (ddd + num).replace(/\D+/g, '');
-                }
-              } finally {
-                try { await poolP.close(); } catch(_){}
-              }
-            } catch (e) {
-              console.error('Erro ao buscar telefone do responsavel em Protheus:', e && e.message ? e.message : e);
-            }
-          }
-
-          if (!destinatario) destinatario = responsavelId || responsavelName || toInsert.responsavel || null;
-          const tipoMsg = 'AGENDAMENTO';
-          const userRequester = createdByFinal || (toInsert.nome || 'Usuário');
-          const visitorName = toInsert.nome || '';
-          function formatDateBR(dt) {
-            try {
-              if (!dt) return '';
-              const s = String(dt).trim();
-              const m = s.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
-              if (m) {
-                const yyyy = m[1];
-                const mm = m[2];
-                const dd = m[3];
-                const hh = m[4];
-                const min = m[5];
-                return `${dd}/${mm}/${yyyy}, ${hh}:${min}`;
-              }
-              const iso = s.includes('T') ? s : s.replace(' ', 'T');
-              const parsed = new Date(iso);
-              if (!isNaN(parsed)) {
-                const dd = String(parsed.getDate()).padStart(2, '0');
-                const mm = String(parsed.getMonth() + 1).padStart(2, '0');
-                const yyyy = parsed.getFullYear();
-                const hh = String(parsed.getHours()).padStart(2, '0');
-                const min = String(parsed.getMinutes()).padStart(2, '0');
-                return `${dd}/${mm}/${yyyy}, ${hh}:${min}`;
-              }
-              return s;
-            } catch (e) { return String(dt); }
-          }
-
-          const dataHoraFmt = formatDateBR(toInsert.data_hora || '');
-          const observTxt = toInsert.observacoes ? `\nObservações: ${toInsert.observacoes}` : '';
-          const mensagemText = `Olá ${responsavelNomeFinal || ''}, tudo bem?\n\n` +
-                               `Você foi designado(a) como responsável pelo agendamento "${toInsert.assunto || ''}" marcado para ${dataHoraFmt || toInsert.data_hora || ''}.\n\n` +
-                               `Solicitante: ${userRequester || ''}\n` +
-                               `Quem irá: ${visitorName || '—'}` +
-                               `${observTxt}\n\n` +
-                               `Por confirmar, digite *sim* ou *não* quando puder. Obrigado!`;
-          const templateName = null;
-          const templateParams = null;
-          const statusMsg = 'PENDENTE';
-          const metadata = JSON.stringify({ agendamento: toInsert, createdBy: userRequester });
-          const reqNotif = poolDw.request();
-          reqNotif.input('tipo', sql.VarChar(100), tipoMsg);
-          reqNotif.input('dest', sql.VarChar(500), destinatario ? String(destinatario) : null);
-          reqNotif.input('mensagem', sql.NVarChar(4000), mensagemText);
-          reqNotif.input('template', sql.VarChar(200), templateName);
-          reqNotif.input('params', sql.VarChar(2000), templateParams);
-          reqNotif.input('status', sql.VarChar(50), statusMsg);
-          reqNotif.input('metadados', sql.NVarChar(4000), metadata);
-
-          const insertNotif = `INSERT INTO [dw].[dbo].[FATO_FILA_NOTIFICACOES] (TIPO_MENSAGEM, DESTINATARIO, MENSAGEM, TEMPLATE_NAME, TEMPLATE_PARAMS, STATUS, TENTATIVAS, ERRO, DTINC, DTENVIO, MESSAGE_ID, METADADOS)
-                               VALUES (@tipo, @dest, @mensagem, @template, @params, @status, 0, NULL, GETDATE(), NULL, NULL, @metadados)`;
-          await reqNotif.query(insertNotif);
-        } finally {
-          try { await poolDw.close(); } catch(_){ }
-        }
-        }
-      } catch (notifErr) {
-        console.error('Erro ao enfileirar notificacao:', notifErr && notifErr.message ? notifErr.message : notifErr);
-      }
+      // Mensagem de confirmação removida - agora apenas o aviso via "Entrevista Única" no frontend será enviado
       try {
         const agendamentoModel = require('./models/agendamentoModel');
         const result = await agendamentoModel.insert(toInsert);
@@ -1215,13 +1080,13 @@ app.post('/notificacoes', ensureAuth, express.json(), async (req, res) => {
 
     const poolDw = await new sql.ConnectionPool(dbDw).connect();
     try {
-      const tipoMsg = 'ENTREVISTA';
+      let tipoMsg = 'ENTREVISTA';
+      if (responsavel === 'Portaria' || String(responsavel || '').includes('Portaria')) {
+        tipoMsg = 'AGENDAMENTO_CRIADO';
+      }
       const statusMsg = 'PENDENTE';
       const metadata = JSON.stringify({ agendamentos_ids: agendamentos_ids || [], responsavel: responsavel });
-      
-      // Garantir que a mensagem está em UTF-8 e com emojis preservados
       const mensagemFinal = String(mensagem || '');
-      
       const req_notif = poolDw.request();
       req_notif.input('tipo', sql.VarChar(100), tipoMsg);
       req_notif.input('dest', sql.VarChar(500), destinatario);
@@ -1321,6 +1186,7 @@ app.get('/horarios-retira', ensureAuth, async (req, res) => {
     const qStart = req.query && req.query.start ? String(req.query.start).trim() : null;
     const qEnd = req.query && req.query.end ? String(req.query.end).trim() : null;
     const today = new Date();
+    // default: show from today forward (6 days)
     let startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     let endDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()+6);
     if (qStart && qEnd) {
@@ -1361,6 +1227,24 @@ app.get('/horarios-retira', ensureAuth, async (req, res) => {
   } catch (e) {
     console.error('Erro ao renderizar horarios-retira:', e && e.message ? e.message : e);
     return res.render('HorariosRetira/horarios_retira', { days: [], reservations: [], reservationsMap: {}, filterStart: null, filterEnd: null, user: { nome: req.session.user_name || req.session.username || req.cookies && req.cookies.username || 'Usuário', email: req.session.user_email || req.cookies && req.cookies.user_email || '', id: req.session.user_id || req.session.userID || null } });
+  }
+});
+
+// JSON API: fetch reservations between start and end (YYYY-MM-DD)
+app.post('/horarios-retira/data', ensureAuth, express.json(), async (req, res) => {
+  try {
+    const start = req.body && req.body.start ? String(req.body.start).trim() : null;
+    const end = req.body && req.body.end ? String(req.body.end).trim() : null;
+    if (!start || !end) return res.json({ success: true, data: [] });
+    const parsedStart = parseLocalDateTimeString(start + ' 00:00:00');
+    const parsedEnd = parseLocalDateTimeString(end + ' 23:59:59');
+    if (isNaN(parsedStart.getTime()) || isNaN(parsedEnd.getTime())) return res.json({ success: true, data: [] });
+    const reservationsRaw = await horariosRetiraModel.getReservationsBetween(parsedStart, parsedEnd);
+    const reservations = (reservationsRaw||[]).map(r => Object.assign({}, r, { data: formatIsoDate(r.data) }));
+    return res.json({ success: true, data: reservations });
+  } catch (e) {
+    console.error('Erro fetch data horarios-retira:', e && e.message ? e.message : e);
+    return res.status(500).json({ success: false, message: 'Erro interno' });
   }
 });
 

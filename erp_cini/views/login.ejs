@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     
     <script>
-        // Intercepta TODOS os métodos de criação de elementos antes de qualquer coisa
         const interceptors = {
             appendChild: Element.prototype.appendChild,
             insertBefore: Element.prototype.insertBefore,
@@ -46,7 +45,6 @@
             return nodes.length ? interceptors.append.apply(this, nodes) : undefined;
         };
 
-        // Monitor e remove se aparecer
         window.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('.back-to-top, .scroll-top').forEach(el => el.remove());
             setInterval(() => {
@@ -122,7 +120,6 @@
             if (input.type === 'password') { input.type = 'text'; icon.classList.remove('bi-eye'); icon.classList.add('bi-eye-slash'); } else { input.type = 'password'; icon.classList.remove('bi-eye-slash'); icon.classList.add('bi-eye'); }
         }
         
-        // Remove imediatamente qualquer elemento com classe back-to-top
         function removeAllBackToTop() {
             document.querySelectorAll('.back-to-top').forEach(el => {
                 el.style.display = 'none !important';
@@ -130,15 +127,12 @@
             });
         }
         
-        // Executa múltiplas vezes para garantir
         removeAllBackToTop();
         document.addEventListener('DOMContentLoaded', removeAllBackToTop);
         setTimeout(removeAllBackToTop, 100);
         setTimeout(removeAllBackToTop, 300);
         setTimeout(removeAllBackToTop, 500);
         setTimeout(removeAllBackToTop, 1000);
-        
-        // Monitor contínuo para remover se reaparecer
         setInterval(removeAllBackToTop, 2000);
     </script>
 </body>

@@ -1,245 +1,171 @@
-const sql = require('mssql');
-const dbDw = require('../config/dbConfigDw');
+'use strict';
+
+const { Op } = require('sequelize');
+const Agendamento = require('./orm/Agendamento');
+const Visitante   = require('./orm/Visitante');
+
+function formatDate(d) {
+  if (!(d instanceof Date)) return d;
+  const Y = d.getFullYear();
+  const M = String(d.getMonth() + 1).padStart(2, '0');
+  const D = String(d.getDate()).padStart(2, '0');
+  const h = String(d.getHours()).padStart(2, '0');
+  const m = String(d.getMinutes()).padStart(2, '0');
+  const s = String(d.getSeconds()).padStart(2, '0');
+  return `${Y}-${M}-${D} ${h}:${m}:${s}`;
+}
+
+function toPlain(row) {
+  const obj = row.get ? row.get({ plain: true }) : Object.assign({}, row);
+  for (const k in obj) {
+    if (obj[k] instanceof Date) obj[k] = formatDate(obj[k]);
+  }
+  return obj;
+}
+
+function parseDataHora(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const s = String(value).trim();
+  const m = s.match(/(\d{4})-(\d{2})-(\d{2}).*?(\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (m) {
+    return new Date(
+      parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10),
+      parseInt(m[4], 10), parseInt(m[5], 10), m[6] ? parseInt(m[6], 10) : 0
+    );
+  }
+  const parsed = new Date(s);
+  return isNaN(parsed) ? null : parsed;
+}
 
 async function getAll() {
   try {
-    const pool = await new sql.ConnectionPool(dbDw).connect();
-    try {
-      
-      const q = `SELECT * FROM [dw].[dbo].[AGENDAMENTO_PORTAL] ORDER BY data_hora DESC`;
-      const r = await pool.request().query(q);
-      const rows = r.recordset || [];
-      const normalized = rows.map(row => {
-        const copy = Object.assign({}, row);
-        for (const k in copy) {
-            if (copy[k] instanceof Date) {
-              const d = copy[k];
-              const Y = d.getFullYear();
-              const M = String(d.getMonth() + 1).padStart(2, '0');
-              const D = String(d.getDate()).padStart(2, '0');
-              const h = String(d.getHours()).padStart(2, '0');
-              const m = String(d.getMinutes()).padStart(2, '0');
-              const s = String(d.getSeconds()).padStart(2, '0');
-              copy[k] = `${Y}-${M}-${D} ${h}:${m}:${s}`;
-          }
-        }
-        return copy;
-      });
-      return normalized;
-    } finally {
-      try { await pool.close(); } catch(_){ }
-    }
+    const rows = await Agendamento.findAll({ order: [['data_hora', 'DESC']] });
+    return rows.map(toPlain);
   } catch (err) {
-    console.error('agendamentoModel.getAll error:', err && err.message ? err.message : err);
+    console.error('agendamentoModel.getAll error:', err.message);
     throw err;
   }
 }
 
 async function getPending() {
   try {
-    const pool = await new sql.ConnectionPool(dbDw).connect();
-    try {
-      const q = `SELECT * FROM [dw].[dbo].[AGENDAMENTO_PORTAL] WHERE status = 'Pendente' ORDER BY data_hora ASC`;
-      const r = await pool.request().query(q);
-      const rows = r.recordset || [];
-      const normalized = rows.map(row => {
-        const copy = Object.assign({}, row);
-        for (const k in copy) {
-            if (copy[k] instanceof Date) {
-              const d = copy[k];
-              const Y = d.getFullYear();
-              const M = String(d.getMonth() + 1).padStart(2, '0');
-              const D = String(d.getDate()).padStart(2, '0');
-              const h = String(d.getHours()).padStart(2, '0');
-              const m = String(d.getMinutes()).padStart(2, '0');
-              const s = String(d.getSeconds()).padStart(2, '0');
-              copy[k] = `${Y}-${M}-${D} ${h}:${m}:${s}`;
-          }
-        }
-        return copy;
-      });
-      return normalized;
-    } finally {
-      try { await pool.close(); } catch(_){ }
-    }
+    const rows = await Agendamento.findAll({
+      where: { status: 'Pendente' },
+      order: [['data_hora', 'ASC']],
+    });
+    return rows.map(toPlain);
   } catch (err) {
-    console.error('agendamentoModel.getPending error:', err && err.message ? err.message : err);
+    console.error('agendamentoModel.getPending error:', err.message);
     throw err;
   }
 }
 
 async function getToday() {
   try {
-    const pool = await new sql.ConnectionPool(dbDw).connect();
-    try {
-      const q = `SELECT * FROM [dw].[dbo].[AGENDAMENTO_PORTAL] WHERE CAST(data_hora AS DATE) = CAST(GETDATE() AS DATE) ORDER BY data_hora DESC`;
-      const r = await pool.request().query(q);
-      const rows = r.recordset || [];
-      const normalized = rows.map(row => {
-        const copy = Object.assign({}, row);
-        for (const k in copy) {
-            if (copy[k] instanceof Date) {
-              const d = copy[k];
-              const Y = d.getFullYear();
-              const M = String(d.getMonth() + 1).padStart(2, '0');
-              const D = String(d.getDate()).padStart(2, '0');
-              const h = String(d.getHours()).padStart(2, '0');
-              const m = String(d.getMinutes()).padStart(2, '0');
-              const s = String(d.getSeconds()).padStart(2, '0');
-              copy[k] = `${Y}-${M}-${D} ${h}:${m}:${s}`;
-          }
-        }
-        return copy;
-      });
-      return normalized;
-    } finally {
-      try { await pool.close(); } catch(_){ }
-    }
+    const now   = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    const end   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const rows  = await Agendamento.findAll({
+      where: { data_hora: { [Op.between]: [start, end] } },
+      order: [['data_hora', 'DESC']],
+    });
+    return rows.map(toPlain);
   } catch (err) {
-    console.error('agendamentoModel.getToday error:', err && err.message ? err.message : err);
+    console.error('agendamentoModel.getToday error:', err.message);
+    throw err;
+  }
+}
+
+async function getById(id) {
+  try {
+    const row = await Agendamento.findByPk(parseInt(id, 10));
+    return row ? toPlain(row) : null;
+  } catch (err) {
+    console.error('agendamentoModel.getById error:', err.message);
     throw err;
   }
 }
 
 async function insert(payload) {
   try {
-    const pool = await new sql.ConnectionPool(dbDw).connect();
+    const created = await Agendamento.create({
+      tipo:             payload.tipo             || null,
+      data_hora:        parseDataHora(payload.data_hora),
+      assunto:          payload.assunto          || null,
+      nome:             payload.nome             || payload.nome_solicitante || null,
+      nome_solicitante: payload.nome             || payload.nome_solicitante || null,
+      telefone:         payload.telefone         || null,
+      cpf_cnpj:         payload.cpf_cnpj         || null,
+      responsavel:      payload.responsavel      || payload.responsavel_name || null,
+      observacoes:      payload.observacoes      || null,
+      status:           'Pendente',
+      criado_por:       payload.criado_por       || payload.createdBy || null,
+      dt_criacao:       new Date(),
+    });
+
     try {
-      const req = pool.request();
-      req.input('tipo', sql.VarChar(100), payload.tipo || null);
-      let dt = null;
-      try {
-        if (payload.data_hora instanceof Date) {
-          dt = payload.data_hora;
-        } else if (payload.data_hora) {
-          const s = String(payload.data_hora).trim();
-          const m = s.match(/(\d{4})-(\d{2})-(\d{2}).*?(\d{2}):(\d{2})(?::(\d{2}))?/);
-          if (m) {
-            const y = parseInt(m[1], 10);
-            const mo = parseInt(m[2], 10) - 1;
-            const d = parseInt(m[3], 10);
-            const hh = parseInt(m[4], 10);
-            const mm = parseInt(m[5], 10);
-            const ss = m[6] ? parseInt(m[6], 10) : 0;
-            dt = new Date(y, mo, d, hh, mm, ss);
-          } else {
-            const parsed = new Date(s);
-            if (!isNaN(parsed)) dt = parsed;
-          }
-        }
-      } catch (e) {
-        dt = null;
+      if (created.id) {
+        await Visitante.create({
+          nome:           created.nome,
+          agendamento_id: created.id,
+          dt_inclusao:    new Date(),
+        });
       }
-      req.input('data_hora', sql.DateTime2, dt || null);
-      req.input('assunto', sql.VarChar(1000), payload.assunto || null);
-
-      req.input('nome', sql.VarChar(250), payload.nome || payload.nome_solicitante || null);
-      req.input('telefone', sql.VarChar(50), payload.telefone || null);
-      req.input('cpf_cnpj', sql.VarChar(50), payload.cpf_cnpj || null);
-      req.input('responsavel', sql.VarChar(250), payload.responsavel || payload.responsavel_name || null);
-      req.input('observacoes', sql.VarChar(2000), payload.observacoes || null);
-      req.input('status', sql.VarChar(50), 'Pendente');
-      req.input('criado_por', sql.VarChar(250), payload.criado_por || payload.createdBy || null);
-      let insertSql;
-      try {
-        const colRes = await pool.request().query("SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='dbo' AND TABLE_NAME='AGENDAMENTO_PORTAL' AND COLUMN_NAME='nome_solicitante'");
-        if (colRes && colRes.recordset && colRes.recordset.length) {
-          insertSql = `INSERT INTO [dw].[dbo].[AGENDAMENTO_PORTAL] (tipo, data_hora, assunto, nome, nome_solicitante, telefone, cpf_cnpj, responsavel, observacoes, status, criado_por, dt_criacao) VALUES (@tipo, @data_hora, @assunto, @nome, @nome, @telefone, @cpf_cnpj, @responsavel, @observacoes, @status, @criado_por, GETDATE())`;
-        } else {
-          insertSql = `INSERT INTO [dw].[dbo].[AGENDAMENTO_PORTAL] (tipo, data_hora, assunto, nome, telefone, cpf_cnpj, responsavel, observacoes, status, criado_por, dt_criacao) VALUES (@tipo, @data_hora, @assunto, @nome, @telefone, @cpf_cnpj, @responsavel, @observacoes, @status, @criado_por, GETDATE())`;
-        }
-      } catch (e) {
-        insertSql = `INSERT INTO [dw].[dbo].[AGENDAMENTO_PORTAL] (tipo, data_hora, assunto, nome, telefone, cpf_cnpj, responsavel, observacoes, status, criado_por, dt_criacao) VALUES (@tipo, @data_hora, @assunto, @nome, @telefone, @cpf_cnpj, @responsavel, @observacoes, @status, @criado_por, GETDATE())`;
-      }
-
-      const insertWithIdSql = insertSql + '; SELECT SCOPE_IDENTITY() AS id;';
-      const insertRes = await req.query(insertWithIdSql);
-      const newId = (insertRes && insertRes.recordset && insertRes.recordset[0] && insertRes.recordset[0].id) ? insertRes.recordset[0].id : null;
-      try {
-        if (newId) {
-          const reqV = pool.request();
-          reqV.input('nome', sql.VarChar(500), payload.nome || null);
-          reqV.input('agendamento_id', sql.Int, newId);
-          const qV = `IF OBJECT_ID('[dw].[dbo].[VISITANTES]','U') IS NOT NULL
-                        INSERT INTO [dw].[dbo].[VISITANTES] (nome, dt_inclusao, agendamento_id) VALUES (@nome, GETDATE(), @agendamento_id)`;
-          await reqV.query(qV);
-        }
-      } catch (e) {
-        console.error('Erro ao inserir visitante:', e && e.message ? e.message : e);
-      }
-      return newId;
-    } finally {
-      try { await pool.close(); } catch(_){}
+    } catch (e) {
+      console.error('Erro ao inserir visitante:', e.message);
     }
+
+    return created.id;
   } catch (err) {
-    console.error('agendamentoModel.insert error:', err && err.message ? err.message : err);
+    console.error('agendamentoModel.insert error:', err.message);
     throw err;
   }
 }
 
 async function updateStatus(id, status, marcadoPor, telefone, cpf_cnpj, dt_cheg) {
   try {
-    const pool = await new sql.ConnectionPool(dbDw).connect();
-    try {
-      const req = pool.request();
-      req.input('id', sql.Int, parseInt(id, 10));
-      req.input('status', sql.VarChar(50), status);
-      let hasConcluidoPor = false;
-      try {
-        const colRes2 = await pool.request().query("SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='dbo' AND TABLE_NAME='AGENDAMENTO_PORTAL' AND COLUMN_NAME='concluido_por'");
-        if (colRes2 && colRes2.recordset && colRes2.recordset.length) hasConcluidoPor = true;
-      } catch (e) {
-        hasConcluidoPor = false;
-      }
-      const setParts = ['status = @status'];
-      if (hasConcluidoPor && typeof marcadoPor !== 'undefined' && marcadoPor !== null) {
-        req.input('concluido_por', sql.VarChar(250), String(marcadoPor));
-        setParts.push('concluido_por = @concluido_por');
-      }
-      if (typeof telefone !== 'undefined' && telefone !== null) {
-        req.input('telefone', sql.VarChar(50), String(telefone) || null);
-        setParts.push('telefone = @telefone');
-      }
-      if (typeof cpf_cnpj !== 'undefined' && cpf_cnpj !== null) {
-        req.input('cpf_cnpj', sql.VarChar(50), String(cpf_cnpj) || null);
-        setParts.push('cpf_cnpj = @cpf_cnpj');
-      }
-      let hasDtCheg = false;
-      try {
-        const colResDt = await pool.request().query("SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='dbo' AND TABLE_NAME='AGENDAMENTO_PORTAL' AND COLUMN_NAME='dt_cheg'");
-        if (colResDt && colResDt.recordset && colResDt.recordset.length) hasDtCheg = true;
-      } catch (e) { hasDtCheg = false; }
-      if (hasDtCheg && typeof dt_cheg !== 'undefined' && dt_cheg !== null) {
-        req.input('dt_cheg', sql.DateTime2, dt_cheg);
-        setParts.push('dt_cheg = @dt_cheg');
-      }
+    const updates = { status };
+    if (marcadoPor != null) updates.concluido_por = String(marcadoPor);
+    if (telefone   != null) updates.telefone      = String(telefone);
+    if (cpf_cnpj   != null) updates.cpf_cnpj      = String(cpf_cnpj);
+    if (dt_cheg    != null) updates.dt_cheg        = dt_cheg;
 
-      const q = `UPDATE [dw].[dbo].[AGENDAMENTO_PORTAL] SET ${setParts.join(', ')} WHERE id = @id`;
-      await req.query(q);
+    await Agendamento.update(updates, { where: { id: parseInt(id, 10) } });
+
+    const visitorUpdates = {};
+    if (telefone != null) visitorUpdates.telefone = String(telefone);
+    if (cpf_cnpj != null) visitorUpdates.cpf_cnpj = String(cpf_cnpj);
+
+    if (Object.keys(visitorUpdates).length) {
       try {
-        const visitorSet = [];
-        const reqV = pool.request();
-        reqV.input('id', sql.Int, parseInt(id, 10));
-        if (typeof telefone !== 'undefined' && telefone !== null) {
-          reqV.input('telefone', sql.VarChar(50), String(telefone) || null);
-          visitorSet.push('telefone = @telefone');
-        }
-        if (typeof cpf_cnpj !== 'undefined' && cpf_cnpj !== null) {
-          reqV.input('cpf_cnpj', sql.VarChar(50), String(cpf_cnpj) || null);
-          visitorSet.push('cpf_cnpj = @cpf_cnpj');
-        }
-        if (visitorSet.length) {
-          const qV = `IF OBJECT_ID('[dw].[dbo].[VISITANTES]','U') IS NOT NULL UPDATE [dw].[dbo].[VISITANTES] SET ${visitorSet.join(', ')} WHERE agendamento_id = @id`;
-          await reqV.query(qV);
-        }
+        await Visitante.update(visitorUpdates, { where: { agendamento_id: parseInt(id, 10) } });
       } catch (e) {
-        console.error('Erro ao atualizar visitante:', e && e.message ? e.message : e);
+        console.error('Erro ao atualizar visitante:', e.message);
       }
-    } finally {
-      try { await pool.close(); } catch(_){ }
     }
   } catch (err) {
-    console.error('agendamentoModel.updateStatus error:', err && err.message ? err.message : err);
+    console.error('agendamentoModel.updateStatus error:', err.message);
+    throw err;
+  }
+}
+
+async function deleteById(id) {
+  try {
+    await Agendamento.destroy({ where: { id: parseInt(id, 10) } });
+  } catch (err) {
+    console.error('agendamentoModel.deleteById error:', err.message);
+    throw err;
+  }
+}
+
+async function markAsSent(ids) {
+  try {
+    const idList = ids.map(id => parseInt(id, 10)).filter(id => !isNaN(id));
+    if (!idList.length) return;
+    await Agendamento.update({ enviou: 1 }, { where: { id: { [Op.in]: idList } } });
+  } catch (err) {
+    console.error('agendamentoModel.markAsSent error:', err.message);
     throw err;
   }
 }
@@ -248,6 +174,9 @@ module.exports = {
   getAll,
   getToday,
   getPending,
+  getById,
   insert,
-  updateStatus
+  updateStatus,
+  deleteById,
+  markAsSent,
 };

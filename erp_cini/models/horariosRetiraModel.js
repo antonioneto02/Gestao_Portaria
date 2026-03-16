@@ -1,242 +1,240 @@
-const sql = require('mssql');
-const dbDw = require('../config/dbConfigDw');
-const dbCentral = require('../config/database');
+'use strict';
 
+const { Op } = require('sequelize');
+const HorarioAgendamento  = require('./orm/HorarioAgendamento');
+const DimCliente          = require('./orm/DimCliente');
+const FatoFilaNotificacao = require('./orm/FatoFilaNotificacao');
+
+function toPlain(row) {
+  return row.get ? row.get({ plain: true }) : Object.assign({}, row);
+}
+
+function mapRow(r) {
+  return {
+    id:           r.id,
+    pedido:       r.pedido,
+    data:         r.data,
+    categoria:    r.categoria,
+    observacao:   r.observacao,
+    usuario:      r.criado_por,
+    cliente_nome: r.nome_cli,
+    cliente_cod:  r.cod_cli,
+    status:       r.status,
+    data_entrada: r.data_entrada,
+    data_saida:   r.data_saida,
+    created_at:   r.dt_criacao,
+  };
+}
+
+async function enrichWithClientInfo(rows) {
+  const codes = [...new Set(rows.map(r => r.cliente_cod).filter(Boolean))];
+  if (!codes.length) return rows;
+
+  const clients = await DimCliente.findAll({ where: { COD_CLIENTE: { [Op.in]: codes } } });
+  const map = {};
+  for (const c of clients) map[c.COD_CLIENTE] = c;
+
+  return rows.map(r => {
+    const c = map[r.cliente_cod];
+    return Object.assign({}, r, {
+      cliente_nome:     r.cliente_nome || (c && (c.FANTASIA || c.NOME)) || null,
+      cliente_fantasia: c ? c.FANTASIA : null,
+    });
+  });
+}
 async function getReservationsBetween(startDate, endDate) {
   try {
-    const pool = await new sql.ConnectionPool(dbDw).connect();
-    try {
-      const req = pool.request();
-      req.input('start', sql.DateTime2, startDate);
-      req.input('end', sql.DateTime2, endDate);
-        const q = `SELECT DISTINCT h.id, h.pedido, h.data, h.categoria AS categoria, h.observacao AS observacao, h.criado_por AS usuario, h.nome_cli AS cliente_nome, h.cod_cli AS cliente_cod, h.status AS status, h.data_entrada AS data_entrada, h.data_saida AS data_saida, h.dt_criacao AS created_at,
-                 c.NOME AS cliente_nome_dim, c.FANTASIA AS cliente_fantasia
-               FROM [dw].[dbo].[HORARIOS_AGENDAMENTO] h
-               LEFT JOIN [dw].[dbo].[DIM_CLIENTES] c ON c.COD_CLIENTE = h.cod_cli
-               WHERE h.data BETWEEN @start AND @end`;
-      const r = await req.query(q);
-      const rows = r.recordset || [];
-      return rows.map(row => {
-        const nome = row.cliente_nome || row.cliente_fantasia || row.cliente_nome_dim || null;
-        return Object.assign({}, row, { cliente_nome: nome, cliente_cod: row.cliente_cod });
-      });
-    } finally {
-      try { await pool.close(); } catch(_){}
-    }
+    const rows = await HorarioAgendamento.findAll({
+      where: { data: { [Op.between]: [startDate, endDate] } },
+      order: [['data', 'ASC']],
+    });
+    const plain = rows.map(r => mapRow(toPlain(r)));
+    return enrichWithClientInfo(plain);
   } catch (e) {
-    console.error('Erro horariosRetiraModel.getReservationsBetween:', e && e.message ? e.message : e);
+    console.error('horariosRetiraModel.getReservationsBetween:', e.message);
     return [];
   }
 }
 
 async function getReservationByDateTime(dt) {
   try {
-    const pool = await new sql.ConnectionPool(dbDw).connect();
-    try {
-        const r = await pool.request().input('dt', sql.DateTime2, dt).query('SELECT TOP 1 id, pedido, data, categoria AS categoria, observacao AS observacao, criado_por AS usuario, nome_cli AS cliente_nome, cod_cli AS cliente_cod, status AS status, data_entrada AS data_entrada, data_saida AS data_saida, dt_criacao AS created_at FROM [dw].[dbo].[HORARIOS_AGENDAMENTO] WHERE data = @dt');
-      const row = (r.recordset && r.recordset[0]) || null;
-      if (!row) return null;
-      return Object.assign({}, row);
-    } finally {
-      try { await pool.close(); } catch(_){}
-    }
+    const row = await HorarioAgendamento.findOne({ where: { data: dt } });
+    return row ? mapRow(toPlain(row)) : null;
   } catch (e) {
-    console.error('Erro horariosRetiraModel.getReservationByDateTime:', e && e.message ? e.message : e);
+    console.error('horariosRetiraModel.getReservationByDateTime:', e.message);
     return null;
   }
 }
 
 async function getReservationById(id) {
   try {
-    const pool = await new sql.ConnectionPool(dbDw).connect();
-    try {
-      const r = await pool.request().input('id', sql.Int, id).query('SELECT TOP 1 id, pedido, data, categoria AS categoria, observacao AS observacao, criado_por AS usuario, nome_cli AS cliente_nome, cod_cli AS cliente_cod, status AS status, data_entrada AS data_entrada, data_saida AS data_saida, dt_criacao AS created_at FROM [dw].[dbo].[HORARIOS_AGENDAMENTO] WHERE id = @id');
-      const row = (r.recordset && r.recordset[0]) || null;
-      if (!row) return null;
-      return Object.assign({}, row);
-    } finally {
-      try { await pool.close(); } catch(_){ }
-    }
+    const row = await HorarioAgendamento.findByPk(id);
+    return row ? mapRow(toPlain(row)) : null;
   } catch (e) {
-    console.error('Erro horariosRetiraModel.getReservationById:', e && e.message ? e.message : e);
+    console.error('horariosRetiraModel.getReservationById:', e.message);
     return null;
   }
 }
 
 async function getAllReservations() {
   try {
-    const pool = await new sql.ConnectionPool(dbDw).connect();
-    try {
-      const req = pool.request();
-      const q = `SELECT id, pedido, data, nome_cli, cod_cli, categoria, observacao, criado_por, status, data_entrada, data_saida, dt_criacao FROM [dw].[dbo].[HORARIOS_AGENDAMENTO] ORDER BY dt_criacao DESC`;
-      const r = await req.query(q);
-      const rows = r.recordset || [];
-      return rows.map(row => ({
-        id: row.id,
-        pedido: row.pedido,
-        data: row.data,
-        nome_cli: row.nome_cli || row.cliente_nome || null,
-        cod_cli: row.cod_cli,
-        categoria: row.categoria,
-        observacao: row.observacao,
-        criado_por: row.criado_por || row.usuario || null,
-        status: row.status,
-        data_entrada: row.data_entrada,
-        data_saida: row.data_saida,
-        dt_criacao: row.dt_criacao
-      }));
-    } finally {
-      try { await pool.close(); } catch(_){}
-    }
+    const rows = await HorarioAgendamento.findAll({ order: [['dt_criacao', 'DESC']] });
+    return rows.map(r => {
+      const p = toPlain(r);
+      return {
+        id:           p.id,
+        pedido:       p.pedido,
+        data:         p.data,
+        nome_cli:     p.nome_cli,
+        cod_cli:      p.cod_cli,
+        categoria:    p.categoria,
+        observacao:   p.observacao,
+        criado_por:   p.criado_por,
+        status:       p.status,
+        data_entrada: p.data_entrada,
+        data_saida:   p.data_saida,
+        dt_criacao:   p.dt_criacao,
+      };
+    });
   } catch (e) {
-    console.error('Erro horariosRetiraModel.getAllReservations:', e && e.message ? e.message : e);
+    console.error('horariosRetiraModel.getAllReservations:', e.message);
     return [];
   }
 }
 
-async function createReservation({ pedido, dt_horario, usuario, cliente_nome, cliente_cod, categoria, observacao, status, attachment_path, attachment_name, attachment_b64, attachment_mimetype }) {
+async function createReservation({
+  pedido, dt_horario, usuario, cliente_nome, cliente_cod,
+  categoria, observacao, status,
+  attachment_path, attachment_name, attachment_b64, attachment_mimetype,
+}) {
   try {
-    const pool = await new sql.ConnectionPool(dbDw).connect();
+    const actualStatus = (status && String(status).trim()) ? String(status).trim() : 'PENDENTE';
+    const created = await HorarioAgendamento.create({
+      pedido:     pedido       || null,
+      data:       dt_horario,
+      criado_por: usuario      || null,
+      nome_cli:   cliente_nome || null,
+      cod_cli:    cliente_cod  || null,
+      categoria:  categoria    || null,
+      observacao: observacao   || null,
+      status:     actualStatus,
+    });
+    const newId = created.id;
     try {
-      const req = pool.request();
-      req.input('pedido', sql.NVarChar(100), pedido || null);
-      req.input('data', sql.DateTime2, dt_horario);
-        const actualStatus = (status && String(status).trim()) ? String(status).trim() : 'PENDENTE';
-        req.input('criado_por', sql.NVarChar(200), usuario || null);
-        req.input('nome_cli', sql.NVarChar(500), cliente_nome || null);
-        req.input('cod_cli', sql.NVarChar(100), cliente_cod || null);
-        req.input('categoria', sql.NVarChar(50), categoria || null);
-        req.input('observacao', sql.NVarChar(1000), observacao || null);
-        req.input('status', sql.NVarChar(50), actualStatus);
-        const q = `INSERT INTO [dw].[dbo].[HORARIOS_AGENDAMENTO] (pedido, data, criado_por, nome_cli, cod_cli, categoria, observacao, status) VALUES (@pedido, @data, @criado_por, @nome_cli, @cod_cli, @categoria, @observacao, @status); SELECT SCOPE_IDENTITY() AS id;`;
-      const r = await req.query(q);
-      const newId = (r.recordset && r.recordset[0] && r.recordset[0].id) ? r.recordset[0].id : null;
-
-      try {
-        const cat = (categoria || '').toString().trim().toLowerCase();
-        const sendEmailFor = ['retira', 'viagem', 'doacao'];
-        if (sendEmailFor.includes(cat) && newId) {
-          const poolCentral = await new sql.ConnectionPool(dbCentral).connect();
-          try {
-            const reqCentral = poolCentral.request();
-                const assunto = `Novo agendamento - ${(categoria || '').toString().toUpperCase()} (${String(pedido || '').trim()})`;
-            let dtFormatted = '';
-            let cliente_fantasia = null;
-            try {
-              if (cliente_cod) {
-                const poolLookup = await new sql.ConnectionPool(dbDw).connect();
-                try {
-                  const rLookup = await poolLookup.request().input('cod', sql.NVarChar(100), String(cliente_cod)).query('SELECT TOP 1 FANTASIA FROM [dw].[dbo].[DIM_CLIENTES] WHERE COD_CLIENTE = @cod');
-                  if (rLookup.recordset && rLookup.recordset[0]) cliente_fantasia = rLookup.recordset[0].FANTASIA || null;
-                } finally {
-                  try { await poolLookup.close(); } catch(_){}
-                }
-              }
-            } catch(eLookup) {}
-            try {
-              const dtObj = dt_horario ? new Date(dt_horario) : null;
-              if (dtObj && !isNaN(dtObj.getTime())) {
-                dtFormatted = dtObj.toLocaleString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-              } else {
-                dtFormatted = String(dt_horario || '');
-              }
-            } catch (e) { dtFormatted = String(dt_horario || ''); }
-
-            const categoryLabel = (cat === 'retira') ? 'retirada' : (cat === 'doacao' ? 'doação' : cat);
-            const corpo = `<!doctype html><html><body>` +
-              `<p>Olá,</p>` +
-              `<p>Um novo agendamento para <strong>${categoryLabel}</strong> foi criado com os dados abaixo:</p>` +
-              `<ul>` +
-              `<li><strong>Pedido:</strong> ${pedido || ''}</li>` +
-              `<li><strong>Horário:</strong> ${dtFormatted}</li>` +
-              `<li><strong>Reserva criada por:</strong> ${usuario || ''}</li>` +
-              `<li><strong>Cliente:</strong> ${cliente_nome || ''} (${cliente_cod || ''})</li>` +
-              `<li><strong>Fantasia:</strong> ${cliente_fantasia || ''}</li>` +
-              `<li><strong>Categoria:</strong> ${(categoria || '').toString().toUpperCase()}</li>` +
-              `<li><strong>Observação:</strong> ${observacao || ''}</li>` +
-              `</ul>` +
-              `<p>Por favor, verifique e entre em contato em caso de dúvidas.</p>` +
-              `<p>Atenciosamente,<br/>Equipe CINI</p>` +
-              `</body></html>`;
-            reqCentral.input('destinatario', sql.NVarChar(500), 'ti02@cini.com.br');
-            reqCentral.input('mensagem', sql.NVarChar(sql.MAX), corpo);
-            reqCentral.input('tipo_mensagem', sql.NVarChar(50), 'EMAIL');
-            reqCentral.input('status', sql.NVarChar(50), 'PENDENTE');
-            reqCentral.input('tentativas', sql.Int, 0);
-            reqCentral.input('template_name', sql.NVarChar(200), null);
-            reqCentral.input('template_params', sql.NVarChar(sql.MAX), null);
-            const metadadosObj = { assunto, reserva_id: newId };
-            if (cliente_fantasia) metadadosObj.cliente_fantasia = cliente_fantasia;
-            if (attachment_path) metadadosObj.attachment_path = attachment_path;
-            if (attachment_name) metadadosObj.attachment_name = attachment_name;
-            if (attachment_b64) metadadosObj.attachment_b64 = attachment_b64;
-            if (attachment_mimetype) metadadosObj.attachment_mimetype = attachment_mimetype;
-            reqCentral.input('metadados', sql.NVarChar(sql.MAX), JSON.stringify(metadadosObj));
-            reqCentral.input('erro', sql.NVarChar(1000), null);
-            reqCentral.input('dtenvio', sql.DateTime2, null);
-            reqCentral.input('message_id', sql.NVarChar(200), null);
-            const qCentral = `INSERT INTO [dw].[dbo].[FATO_FILA_NOTIFICACOES] (TIPO_MENSAGEM, DESTINATARIO, MENSAGEM, TEMPLATE_NAME, TEMPLATE_PARAMS, STATUS, TENTATIVAS, ERRO, DTINC, DTENVIO, MESSAGE_ID, METADADOS) VALUES (@tipo_mensagem, @destinatario, @mensagem, @template_name, @template_params, @status, @tentativas, @erro, GETDATE(), @dtenvio, @message_id, @metadados)`;
-            await reqCentral.query(qCentral);
-
-            const reqCentral2 = poolCentral.request();
-            reqCentral2.input('destinatario', sql.NVarChar(500), '');
-            reqCentral2.input('mensagem', sql.NVarChar(sql.MAX), corpo);
-            reqCentral2.input('tipo_mensagem', sql.NVarChar(50), 'EMAIL');
-            reqCentral2.input('status', sql.NVarChar(50), 'PENDENTE');
-            reqCentral2.input('tentativas', sql.Int, 0);
-            reqCentral2.input('template_name', sql.NVarChar(200), null);
-            reqCentral2.input('template_params', sql.NVarChar(sql.MAX), null);
-            reqCentral2.input('metadados', sql.NVarChar(sql.MAX), JSON.stringify(metadadosObj));
-            reqCentral2.input('erro', sql.NVarChar(1000), null);
-            reqCentral2.input('dtenvio', sql.DateTime2, null);
-            reqCentral2.input('message_id', sql.NVarChar(200), null);
-            await reqCentral2.query(qCentral);
-          } finally {
-            try { await poolCentral.close(); } catch(_){}
+      const cat = (categoria || '').toString().trim().toLowerCase();
+      if (['retira', 'viagem', 'doacao'].includes(cat) && newId) {
+        let cliente_fantasia = null;
+        try {
+          if (cliente_cod) {
+            const dimCli = await DimCliente.findOne({ where: { COD_CLIENTE: String(cliente_cod) } });
+            if (dimCli) cliente_fantasia = dimCli.FANTASIA || null;
           }
-        }
-      } catch (eCentral) {
-        console.error('Erro ao enfileirar notificação central:', eCentral && eCentral.message ? eCentral.message : eCentral);
-      }
+        } catch (_) {}
 
-      return newId;
-    } finally {
-      try { await pool.close(); } catch(_){}
+        let dtFormatted = '';
+        try {
+          const dtObj = dt_horario ? new Date(dt_horario) : null;
+          if (dtObj && !isNaN(dtObj.getTime())) {
+            dtFormatted = dtObj.toLocaleString('pt-BR', {
+              weekday: 'long', day: '2-digit', month: '2-digit',
+              year: 'numeric', hour: '2-digit', minute: '2-digit',
+            });
+          } else {
+            dtFormatted = String(dt_horario || '');
+          }
+        } catch (_) { dtFormatted = String(dt_horario || ''); }
+
+        const assunto       = `Novo agendamento - ${(categoria || '').toUpperCase()} (${String(pedido || '').trim()})`;
+        const categoryLabel = cat === 'retira' ? 'retirada' : cat === 'doacao' ? 'doação' : cat;
+        const corpo         = `<!doctype html><html><body>` +
+          `<p>Olá,</p>` +
+          `<p>Um novo agendamento para <strong>${categoryLabel}</strong> foi criado com os dados abaixo:</p>` +
+          `<ul>` +
+          `<li><strong>Pedido:</strong> ${pedido || ''}</li>` +
+          `<li><strong>Horário:</strong> ${dtFormatted}</li>` +
+          `<li><strong>Reserva criada por:</strong> ${usuario || ''}</li>` +
+          `<li><strong>Cliente:</strong> ${cliente_nome || ''} (${cliente_cod || ''})</li>` +
+          `<li><strong>Fantasia:</strong> ${cliente_fantasia || ''}</li>` +
+          `<li><strong>Categoria:</strong> ${(categoria || '').toUpperCase()}</li>` +
+          `<li><strong>Observação:</strong> ${observacao || ''}</li>` +
+          `</ul>` +
+          `<p>Por favor, verifique e entre em contato em caso de dúvidas.</p>` +
+          `<p>Atenciosamente,<br/>Equipe CINI</p>` +
+          `</body></html>`;
+
+        const metadadosObj = { assunto, reserva_id: newId };
+        if (cliente_fantasia)   metadadosObj.cliente_fantasia   = cliente_fantasia;
+        if (attachment_path)    metadadosObj.attachment_path    = attachment_path;
+        if (attachment_name)    metadadosObj.attachment_name    = attachment_name;
+        if (attachment_b64)     metadadosObj.attachment_b64     = attachment_b64;
+        if (attachment_mimetype) metadadosObj.attachment_mimetype = attachment_mimetype;
+
+        const notifBase = {
+          TIPO_MENSAGEM:   'EMAIL',
+          MENSAGEM:        corpo,
+          TEMPLATE_NAME:   null,
+          TEMPLATE_PARAMS: null,
+          STATUS:          'PENDENTE',
+          TENTATIVAS:      0,
+          ERRO:            null,
+          DTINC:           new Date(),
+          DTENVIO:         null,
+          MESSAGE_ID:      null,
+          METADADOS:       JSON.stringify(metadadosObj),
+        };
+
+        await FatoFilaNotificacao.create({ ...notifBase, DESTINATARIO: 'ti02@cini.com.br' });
+        await FatoFilaNotificacao.create({ ...notifBase, DESTINATARIO: '' });
+      }
+    } catch (eCentral) {
+      console.error('Erro ao enfileirar notificação central:', eCentral.message);
     }
+
+    return newId;
   } catch (e) {
     const msg = (e && e.message) ? e.message.toString() : String(e);
-      if (msg.indexOf('IX_HORARIOS_AGENDAMENTO_UNQ_DATA') !== -1 || msg.toLowerCase().indexOf('unique') !== -1) {
+    if (msg.includes('IX_HORARIOS_AGENDAMENTO_UNQ_DATA') || msg.toLowerCase().includes('unique')) {
       const err = new Error('Slot already booked');
       err.code = 'SLOT_BOOKED';
       throw err;
     }
-    console.error('Erro horariosRetiraModel.createReservation:', e && e.message ? e.message : e);
+    console.error('horariosRetiraModel.createReservation:', e.message);
     throw e;
   }
 }
 
 async function updateReservationDates(id, { data_entrada, data_saida }) {
   try {
-    const pool = await new sql.ConnectionPool(dbDw).connect();
-    try {
-      const req = pool.request();
-      req.input('id', sql.Int, id);
-      req.input('data_entrada', sql.DateTime2, data_entrada || null);
-      req.input('data_saida', sql.DateTime2, data_saida || null);
-      let q = `UPDATE [dw].[dbo].[HORARIOS_AGENDAMENTO] SET data_entrada = @data_entrada, data_saida = @data_saida`;
-      if (data_entrada && data_saida) {
-        q += `, status = 'CONCLUIDO'`;
-      } else if (data_entrada && !data_saida) {
-        q += `, status = 'FALTA DT SAIDA'`;
-      }
-      q += ` WHERE id = @id; SELECT TOP 1 id, pedido, data, categoria AS categoria, observacao AS observacao, criado_por AS usuario, nome_cli AS cliente_nome, cod_cli AS cliente_cod, status AS status, data_entrada AS data_entrada, data_saida AS data_saida, dt_criacao AS created_at FROM [dw].[dbo].[HORARIOS_AGENDAMENTO] WHERE id = @id`;
-      const r = await req.query(q);
-      return (r.recordset && r.recordset[0]) ? r.recordset[0] : null;
-    } finally {
-      try { await pool.close(); } catch(_){ }
-    }
+    const updates = { data_entrada: data_entrada || null, data_saida: data_saida || null };
+    if (data_entrada && data_saida)   updates.status = 'CONCLUIDO';
+    else if (data_entrada && !data_saida) updates.status = 'FALTA DT SAIDA';
+
+    await HorarioAgendamento.update(updates, { where: { id } });
+    const row = await HorarioAgendamento.findByPk(id);
+    return row ? mapRow(toPlain(row)) : null;
   } catch (e) {
-    console.error('Erro horariosRetiraModel.updateReservationDates:', e && e.message ? e.message : e);
+    console.error('horariosRetiraModel.updateReservationDates:', e.message);
+    throw e;
+  }
+}
+
+async function conclude(id) {
+  try {
+    await HorarioAgendamento.update(
+      { status: 'Concluído', data_saida: new Date() },
+      { where: { id: parseInt(id, 10) } }
+    );
+  } catch (e) {
+    console.error('horariosRetiraModel.conclude:', e.message);
+    throw e;
+  }
+}
+
+async function deleteById(id) {
+  try {
+    await HorarioAgendamento.destroy({ where: { id: parseInt(id, 10) } });
+  } catch (e) {
+    console.error('horariosRetiraModel.deleteById:', e.message);
     throw e;
   }
 }
@@ -245,7 +243,9 @@ module.exports = {
   getReservationsBetween,
   getReservationByDateTime,
   getReservationById,
-  createReservation
-  , updateReservationDates
-  , getAllReservations
+  getAllReservations,
+  createReservation,
+  updateReservationDates,
+  conclude,
+  deleteById,
 };

@@ -4,6 +4,15 @@ const sql = require("mssql");
 const dbConfigDw = require("../config/dbConfigDw");
 
 dotenv.config();
+
+let _sharedPool = null;
+async function getPool() {
+  if (_sharedPool && _sharedPool.connected) return _sharedPool;
+  const pool = new sql.ConnectionPool(dbConfigDw);
+  _sharedPool = await pool.connect();
+  _sharedPool.on('error', () => { _sharedPool = null; });
+  return _sharedPool;
+}
 async function validaLogin(username, password, res, req) {
   let protheusServer = process.env.PROTHEUS_SERVER;
   try {
@@ -375,10 +384,8 @@ async function getUserGroups(req) {
 }
 
 async function getNomeGrupo(codGrupo) {
-  let pool = null;
   try {
-    const connectionPool = new sql.ConnectionPool(dbConfigDw);
-    pool = await connectionPool.connect();
+    const pool = await getPool();
     const request = pool.request();
     request.input('CODGRUPO', sql.VarChar, codGrupo);
     const query = `
@@ -394,21 +401,12 @@ async function getNomeGrupo(codGrupo) {
   } catch (error) {
     console.error("Erro ao obter nome do grupo:", error);
     return '';
-  } finally {
-    if (pool) {
-      try {
-        await pool.close();
-      } catch (closeError) {
-      }
-    }
   }
 }
 
 async function getGruposEndpoints(codGrupo, origin, userID = null) {
-  let pool = null;
   try {
-    const connectionPool = new sql.ConnectionPool(dbConfigDw);
-    pool = await connectionPool.connect();
+    const pool = await getPool();
     const request = pool.request();
     request.input('CODGRUPO', sql.VarChar, codGrupo);
     request.input('ORIGIN', sql.VarChar, origin);
@@ -451,21 +449,12 @@ async function getGruposEndpoints(codGrupo, origin, userID = null) {
     }
   } catch (error) {
     throw error;
-  } finally {
-    if (pool) {
-      try {
-        await pool.close();
-      } catch (closeError) {
-      }
-    }
   }
 }
 
 async function verificarAcessoPrefixo(codGrupo, prefixo) {
-  let pool = null;
   try {
-    const connectionPool = new sql.ConnectionPool(dbConfigDw);
-    pool = await connectionPool.connect();
+    const pool = await getPool();
     const request = pool.request();
     request.input('CODGRUPO', sql.VarChar, codGrupo);
     request.input('PREFIXO', sql.VarChar, prefixo + '%');
@@ -486,25 +475,16 @@ async function verificarAcessoPrefixo(codGrupo, prefixo) {
     }
   } catch (error) {
     throw error;
-  } finally {
-    if (pool) {
-      try {
-        await pool.close();
-      } catch (closeError) {
-      }
-    }
   }
 }
 
 async function verificarAcessoRotasEmLote(codGrupos, rotas, userID = null) {
-  let pool = null;
   try {
     if (!codGrupos || codGrupos.length === 0 || !rotas || rotas.length === 0) {
       return {};
     }
 
-    const connectionPool = new sql.ConnectionPool(dbConfigDw);
-    pool = await connectionPool.connect();
+    const pool = await getPool();
     const request = pool.request();
     const gruposList = codGrupos.map((_, idx) => {
       request.input(`CODGRUPO${idx}`, sql.VarChar, codGrupos[idx]);
@@ -581,21 +561,12 @@ async function verificarAcessoRotasEmLote(codGrupos, rotas, userID = null) {
   } catch (error) {
     console.error('Erro ao verificar acesso em lote:', error);
     return {};
-  } finally {
-    if (pool) {
-      try {
-        await pool.close();
-      } catch (closeError) {
-      }
-    }
   }
 }
 
 async function getUsuarios() {
-  let pool = null;
   try {
-    const connectionPool = new sql.ConnectionPool(dbConfigDw);
-    pool = await connectionPool.connect();
+    const pool = await getPool();
 
     let query = "";
     query += " SELECT *";
@@ -611,13 +582,6 @@ async function getUsuarios() {
     }
   } catch (error) {
     throw error;
-  } finally {
-    if (pool) {
-      try {
-        await pool.close();
-      } catch (closeError) {
-      }
-    }
   }
 }
 async function verificarEAtualizarToken(req, res, next) {

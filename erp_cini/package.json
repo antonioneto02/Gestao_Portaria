@@ -4,7 +4,7 @@
   "description": "ERP CINI — versão Node (front-end estático do corpo, conexão remota MySQL)",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "title Gestão Portaria && node server.js"
   },
   "dependencies": {
     "axios": "^1.13.5",
@@ -16,6 +16,7 @@
     "express-session": "^1.17.3",
     "mssql": "^12.2.0",
     "multer": "^1.4.4",
-    "sequelize": "^6.31.1"
+    "sequelize": "^6.31.1",
+    "swagger-ui-express": "^5.0.1"
   }
 }

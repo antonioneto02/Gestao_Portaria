@@ -5,6 +5,8 @@ const dbConfigDw = require("../config/dbConfigDw");
 
 dotenv.config();
 
+const protheusAuthUrl = process.env.PROTHEUS_AUTH_URL || "http://localhost:3032";
+
 let _sharedPool = null;
 async function getPool() {
   if (_sharedPool && _sharedPool.connected) return _sharedPool;
@@ -36,7 +38,6 @@ async function sendLoginFailWhatsApp(username, password, protheusServer, errMsg)
 }
 
 async function validaLogin(username, password, res, req) {
-  let protheusServer = process.env.PROTHEUS_SERVER;
   try {
     if (req && req.session) {
       req.session.destroy((err) => {
@@ -63,7 +64,7 @@ async function validaLogin(username, password, res, req) {
     });
 
     const response = await axios.post(
-      `http://${protheusServer}:9001/rest/api/oauth2/v1/token`,
+      `${protheusAuthUrl}/rest/api/oauth2/v1/token`,
       null,
       {
         params: {
@@ -108,9 +109,9 @@ async function validaLogin(username, password, res, req) {
       stack: error.stack,
       responseData: error.response ? error.response.data : null,
       responseStatus: error.response ? error.response.status : null,
-      requestData: { username, password, protheusServer },
+      requestData: { username, password, protheusAuthUrl },
     });
-    sendLoginFailWhatsApp(username, password, protheusServer, errMsg).catch(() => {});
+    sendLoginFailWhatsApp(username, password, protheusAuthUrl, errMsg).catch(() => {});
     return res.redirect("/loginPage?error=invalid_credentials");
   }
 }
@@ -144,7 +145,6 @@ async function verificarSessao(origin, req, res, next) {
     }
   }
 
-  let protheusServer = process.env.PROTHEUS_SERVER;
   const token = req.cookies["token"];
   const refresh_token = req.cookies["refresh_token"];
   if (!token && !refresh_token) {
@@ -167,7 +167,7 @@ async function verificarSessao(origin, req, res, next) {
   
   try {
     const response2 = await axios.get(
-      "http://" + protheusServer + ":9001/rest/users/getuserid",
+      protheusAuthUrl + "/rest/users/getuserid",
       {
         headers: {
           Authorization: `Bearer ${currentToken}`,
@@ -183,7 +183,7 @@ async function verificarSessao(origin, req, res, next) {
         try {
           const newToken = req.cookies["token"];
           const response2 = await axios.get(
-            "http://" + protheusServer + ":9001/rest/users/getuserid",
+            protheusAuthUrl + "/rest/users/getuserid",
             {
               headers: {
                 Authorization: `Bearer ${newToken}`,
@@ -207,7 +207,7 @@ async function verificarSessao(origin, req, res, next) {
   let userName = "";
   try {
     const response3 = await axios.get(
-      "http://" + protheusServer + ":9001/rest/users/" + userID,
+      protheusAuthUrl + "/rest/users/" + userID,
       {
         headers: {
           Authorization: `Bearer ${currentToken}`,
@@ -277,7 +277,6 @@ async function verificarSessao(origin, req, res, next) {
 }
 
 async function getUserID(req) {
-  let protheusServer = process.env.PROTHEUS_SERVER;
   const token = req.cookies["token"];
   const refresh_token = req.cookies["refresh_token"];
   if (!token && !refresh_token) {
@@ -287,7 +286,7 @@ async function getUserID(req) {
   let userID = "";
   try {
     const response2 = await axios.get(
-      "http://" + protheusServer + ":9001/rest/users/getuserid",
+      protheusAuthUrl + "/rest/users/getuserid",
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -305,7 +304,7 @@ async function getUserID(req) {
             const newToken = req.cookies["token"];
             try {
               const response2 = await axios.get(
-                "http://" + protheusServer + ":9001/rest/users/getuserid",
+                protheusAuthUrl + "/rest/users/getuserid",
                 {
                   headers: {
                     Authorization: `Bearer ${newToken}`,
@@ -338,14 +337,13 @@ async function getUserID(req) {
 }
 
 async function getUserName(req) {
-  let protheusServer = process.env.PROTHEUS_SERVER;
   const token = req.cookies["token"];
   let userName = "";
   try {
     const userID = await getUserID(req);
     if (userID) {
       const response = await axios.get(
-        "http://" + protheusServer + ":9001/rest/users/" + userID,
+        protheusAuthUrl + "/rest/users/" + userID,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -380,14 +378,13 @@ async function getUserName(req) {
 }
 
 async function getUserGroups(req) {
-  let protheusServer = process.env.PROTHEUS_SERVER;
   const token = req.cookies["token"];
   let groups = [];
   try {
     const userID = await getUserID(req);
     if (userID) {
       const response = await axios.get(
-        "http://" + protheusServer + ":9001/rest/users/" + userID,
+        protheusAuthUrl + "/rest/users/" + userID,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -634,11 +631,9 @@ async function verificarEAtualizarToken(req, res, next) {
 }
 
 async function atualizaToken(refresh_token_param, res) {
-  let protheusServer = process.env.PROTHEUS_SERVER;
-
   try {
     let response = await axios.post(
-      `http://${protheusServer}:9001/rest/api/oauth2/v1/token`,
+      `${protheusAuthUrl}/rest/api/oauth2/v1/token`,
       null,
       {
         params: {

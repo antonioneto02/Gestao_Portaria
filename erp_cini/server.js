@@ -2,6 +2,7 @@
 
 const path        = require('path');
 const fs          = require('fs');
+const https       = require('https');
 const express     = require('express');
 const compression = require('compression');
 const session     = require('express-session');
@@ -1025,6 +1026,12 @@ app.post('/horarios-retira/book-multipart', ensureAuth, upload.single('attachmen
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+const CERT_DIR = 'C:\\Projetos\\Certificados';
+const sslOptions = {
+  key: fs.readFileSync(path.join(CERT_DIR, 'cini.key')),
+  cert: fs.readFileSync(path.join(CERT_DIR, 'cini.crt')),
+};
+
+https.createServer(sslOptions, app).listen(PORT, () => {
+  console.log(`Server running on https://localhost:${PORT}`);
 });

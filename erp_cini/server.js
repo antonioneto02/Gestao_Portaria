@@ -1030,7 +1030,7 @@ app.post('/horarios-retira/book-multipart', ensureAuth, upload.single('attachmen
   }
 });
 
-const CERT_DIR = 'C:\\Projetos\\Certificados';
+const CERT_DIR = process.env.CERT_DIR || 'C:\\Projetos\\Certificados';
 const sslOptions = {
   key: fs.readFileSync(path.join(CERT_DIR, 'cini.key')),
   cert: fs.readFileSync(path.join(CERT_DIR, 'cini.crt')),

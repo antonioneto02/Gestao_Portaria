@@ -10,5 +10,8 @@ services:
       - "3003:3003"
     env_file:
       - .env
+    environment:
+      CERT_DIR: C:/certs
     volumes:
       - ./uploads:C:/app/uploads
+      - C:/Projetos/Certificados:C:/certs:ro

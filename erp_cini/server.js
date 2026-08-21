@@ -39,6 +39,10 @@ const { swaggerUi, swaggerDocument } = require('./swagger');
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
 app.use(cookieParser());
+
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', service: 'erp-cini' });
+});
 app.use((req, res, next) => {
   try {
     if (req.query && (req.query.sso_token || req.query.sso_refresh)) {

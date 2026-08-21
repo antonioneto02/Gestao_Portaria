@@ -1,0 +1,14 @@
+services:
+  erp-cini:
+    image: erp-cini:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: erp-cini
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+    env_file:
+      - .env
+    volumes:
+      - ./uploads:C:/app/uploads

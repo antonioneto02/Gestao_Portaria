@@ -72,6 +72,7 @@ async function validaLogin(username, password, res, req) {
           username: username,
           password: password,
         },
+        headers: { "X-Client-IP": req?.ip },
         timeout: 10000,
       }
     );

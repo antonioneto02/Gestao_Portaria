@@ -412,9 +412,10 @@ async function getNomeGrupo(codGrupo) {
     const pool = await getPool();
     const request = pool.request();
     request.input('CODGRUPO', sql.VarChar, codGrupo);
+    const protheusDb = process.env.DB_DATABASE_PROTHEUS || 'p11_prod';
     const query = `
       SELECT TOP 1 RTRIM(GR__NOME) AS NomeGrupo
-      FROM p11_prod..SYS_GRP_GROUP
+      FROM ${protheusDb}..SYS_GRP_GROUP
       WHERE GR__ID = @CODGRUPO AND D_E_L_E_T_ <> '*'
     `;
     const result = await request.query(query);

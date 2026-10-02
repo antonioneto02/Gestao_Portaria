@@ -2,6 +2,7 @@
 
 const { Op } = require('sequelize');
 const HorarioAgendamento  = require('./orm/HorarioAgendamento');
+const { ordemSqlServer } = require('../config/sequelize');
 const DimCliente          = require('./orm/DimCliente');
 const FatoFilaNotificacao = require('./orm/FatoFilaNotificacao');
 
@@ -46,7 +47,7 @@ async function getReservationsBetween(startDate, endDate) {
   try {
     const rows = await HorarioAgendamento.findAll({
       where: { data: { [Op.between]: [startDate, endDate] } },
-      order: [['data', 'ASC']],
+      order: [ordemSqlServer('data', 'ASC')],
     });
     const plain = rows.map(r => mapRow(toPlain(r)));
     return enrichWithClientInfo(plain);

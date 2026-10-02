@@ -1,7 +1,7 @@
 'use strict';
 
 const { DataTypes } = require('sequelize');
-const { sequelizeGestao } = require('../../config/sequelize');
+const { sequelizeGestao, esquemaGestao } = require('../../config/sequelize');
 const CargaPortaria = sequelizeGestao.define('CargaPortaria', {
   id:           { type: DataTypes.INTEGER,       primaryKey: true, autoIncrement: true },
   filial:       { type: DataTypes.STRING(50) },
@@ -18,7 +18,7 @@ const CargaPortaria = sequelizeGestao.define('CargaPortaria', {
   dt_criacao:   { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
 }, {
   tableName:  'CARGAS_PORTARIA',
-  schema:     'dbo',
+  schema:     esquemaGestao,
   timestamps: false,
 });
 

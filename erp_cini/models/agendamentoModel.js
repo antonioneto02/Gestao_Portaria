@@ -2,6 +2,7 @@
 
 const { Op } = require('sequelize');
 const Agendamento = require('./orm/Agendamento');
+const { ordemSqlServer } = require('../config/sequelize');
 const Visitante   = require('./orm/Visitante');
 
 function formatDate(d) {
@@ -40,7 +41,7 @@ function parseDataHora(value) {
 
 async function getAll() {
   try {
-    const rows = await Agendamento.findAll({ order: [['data_hora', 'DESC']] });
+    const rows = await Agendamento.findAll({ order: [ordemSqlServer('data_hora', 'DESC')] });
     return rows.map(toPlain);
   } catch (err) {
     console.error('agendamentoModel.getAll error:', err.message);
@@ -52,7 +53,7 @@ async function getPending() {
   try {
     const rows = await Agendamento.findAll({
       where: { status: 'Pendente' },
-      order: [['data_hora', 'ASC']],
+      order: [ordemSqlServer('data_hora', 'ASC')],
     });
     return rows.map(toPlain);
   } catch (err) {
@@ -68,7 +69,7 @@ async function getToday() {
     const end   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
     const rows  = await Agendamento.findAll({
       where: { data_hora: { [Op.between]: [start, end] } },
-      order: [['data_hora', 'DESC']],
+      order: [ordemSqlServer('data_hora', 'DESC')],
     });
     return rows.map(toPlain);
   } catch (err) {

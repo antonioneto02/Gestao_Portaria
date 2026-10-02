@@ -1,7 +1,7 @@
 'use strict';
 
 const { DataTypes } = require('sequelize');
-const { sequelizeGestao } = require('../../config/sequelize');
+const { sequelizeGestao, esquemaGestao } = require('../../config/sequelize');
 const Agendamento = sequelizeGestao.define('Agendamento', {
   id:               { type: DataTypes.INTEGER,     primaryKey: true, autoIncrement: true },
   tipo:             { type: DataTypes.STRING(100) },
@@ -21,7 +21,7 @@ const Agendamento = sequelizeGestao.define('Agendamento', {
   enviou:           { type: DataTypes.INTEGER, defaultValue: 0 },
 }, {
   tableName:  'AGENDAMENTO_PORTAL',
-  schema:     'dbo',
+  schema:     esquemaGestao,
   timestamps: false,
 });
 

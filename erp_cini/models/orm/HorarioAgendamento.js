@@ -1,7 +1,7 @@
 'use strict';
 
 const { DataTypes } = require('sequelize');
-const { sequelizeGestao } = require('../../config/sequelize');
+const { sequelizeGestao, esquemaGestao } = require('../../config/sequelize');
 const HorarioAgendamento = sequelizeGestao.define('HorarioAgendamento', {
   id:           { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   pedido:       { type: DataTypes.STRING(100) },
@@ -17,7 +17,7 @@ const HorarioAgendamento = sequelizeGestao.define('HorarioAgendamento', {
   dt_criacao:   { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
 }, {
   tableName:  'HORARIOS_AGENDAMENTO',
-  schema:     'dbo',
+  schema:     esquemaGestao,
   timestamps: false,
 });
 

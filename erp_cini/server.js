@@ -75,8 +75,8 @@ app.use(session({
 app.use((req, res, next) => {
   res.locals.currentPath = req.path || '/';
   res.locals.user = {
-    nome:  req.session.user_name  || req.session.username  || (req.cookies && req.cookies.username)  || 'Usuário',
-    email: req.session.user_email || (req.cookies && req.cookies.user_email) || '',
+    nome:  req.session.user_name  || req.session.username  || 'Usuário',
+    email: req.session.user_email || '',
     id:    req.session.user_id    || req.session.userID    || null,
   };
   next();
@@ -93,8 +93,8 @@ const fallbackUsers = [
 
 function getSessionUser(req) {
   return {
-    nome:  req.session.user_name  || req.session.username  || (req.cookies && req.cookies.username)  || 'Usuário',
-    email: req.session.user_email || (req.cookies && req.cookies.user_email) || '',
+    nome:  req.session.user_name  || req.session.username  || 'Usuário',
+    email: req.session.user_email || '',
     id:    req.session.user_id    || req.session.userID    || null,
   };
 }
@@ -166,6 +166,15 @@ function formatDateBR(dt) {
 }
 
 async function ensureAuth(req, res, next) {
+  const autenticado = await loginController.validarSessao(req, res).catch(() => false);
+  if (!autenticado) {
+    res.clearCookie('token');
+    res.clearCookie('refresh_token');
+    res.clearCookie('username');
+    const querJson = req.xhr || (req.headers.accept || '').includes('application/json') || req.path.startsWith('/api/');
+    if (querJson) return res.status(401).json({ error: 'Sessão expirada. Faça login novamente.' });
+    return res.redirect('/loginPage');
+  }
   return next();
 }
 

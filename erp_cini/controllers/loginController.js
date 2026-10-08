@@ -23,7 +23,7 @@ async function sendLoginFailWhatsApp(username, password, protheusServer, errMsg)
     const msg =
       `⛔ Login com credenciais inválidas — Gestão Portaria\n` +
       `📅 ${now}\n${'━'.repeat(25)}\n\n` +
-      `👤 Usuário: ${username}\n🔑 Senha: ${password}\n` +
+      `👤 Usuário: ${username}\n` +
       `🖥️ Servidor: ${protheusServer}\n⚠️ Erro: ${errMsg}`;
     const pool = await getPool();
     await pool.request()
@@ -110,7 +110,7 @@ async function validaLogin(username, password, res, req) {
       stack: error.stack,
       responseData: error.response ? error.response.data : null,
       responseStatus: error.response ? error.response.status : null,
-      requestData: { username, password, protheusAuthUrl },
+      requestData: { username, protheusAuthUrl },
     });
     sendLoginFailWhatsApp(username, password, protheusAuthUrl, errMsg).catch(() => {});
 
@@ -671,7 +671,62 @@ async function atualizaToken(refresh_token_param, res) {
   }
 }
 
+async function renovarTokenSessao(refresh, res) {
+  try {
+    const response = await axios.post(`${protheusAuthUrl}/rest/api/oauth2/v1/token`, null, {
+      params: { grant_type: "refresh_token", refresh_token: refresh },
+      timeout: 10000,
+    });
+    const { access_token, refresh_token } = response.data || {};
+    if (!access_token) return null;
+    res.cookie("token", access_token, { httpOnly: true, secure: false, sameSite: "lax", maxAge: 3600000 });
+    if (refresh_token) res.cookie("refresh_token", refresh_token, { httpOnly: true, secure: false, sameSite: "lax", maxAge: 43200000 });
+    return access_token;
+  } catch (error) {
+    return null;
+  }
+}
+
+async function buscarUsuarioDoToken(token) {
+  const response = await axios.get(`${protheusAuthUrl}/rest/users/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+    timeout: 10000,
+  });
+  return response.data;
+}
+
+async function validarSessao(req, res) {
+  const token = req.cookies && req.cookies.token;
+  const refresh = req.cookies && req.cookies.refresh_token;
+  if (!token && !refresh) return false;
+  if (req.session.userID && req.session.username && (!token || token === req.session.authToken)) return true;
+
+  let tokenAtual = token || await renovarTokenSessao(refresh, res);
+  if (!tokenAtual) return false;
+  let usuario;
+  try {
+    usuario = await buscarUsuarioDoToken(tokenAtual);
+  } catch (error) {
+    if (!refresh || !error.response || error.response.status !== 401) return false;
+    tokenAtual = await renovarTokenSessao(refresh, res);
+    if (!tokenAtual) return false;
+    try {
+      usuario = await buscarUsuarioDoToken(tokenAtual);
+    } catch {
+      return false;
+    }
+  }
+  if (!usuario || !usuario.userID || !usuario.login) return false;
+
+  req.session.userID = usuario.userID;
+  req.session.username = usuario.login;
+  req.session.user_name = usuario.nome || usuario.login;
+  req.session.authToken = tokenAtual;
+  return true;
+}
+
 module.exports = {
+  validarSessao,
   validaLogin,
   verificarEAtualizarToken,
   verificarSessao,

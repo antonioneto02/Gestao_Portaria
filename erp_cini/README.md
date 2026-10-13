@@ -66,7 +66,7 @@ O sistema resolve problemas como:
 - **Tipo:** SQL Server (biblioteca `mssql` + Sequelize ORM)
 - **Bancos:**
   - `dw` — Data Warehouse (dados de agendamentos, conferências, cargas, notificações)
-  - `p11_prod` — Protheus (dados do ERP)
+  - `p2510` — Protheus (dados do ERP)
 - **ORM:** Sequelize para modelos de agendamento, horários, clientes e cargas
 
 ## 🔗 Integrações
@@ -91,7 +91,7 @@ DB_USER_ERP=seu_usuario
 DB_PASSWORD_ERP=sua_senha
 DB_SERVER_ERP=localhost
 DB_DATABASE_DW=dw
-DB_DATABASE_PROTHEUS=p11_prod
+DB_DATABASE_PROTHEUS=p2510
 
 # Protheus
 PROTHEUS_SERVER=192.168.0.88
@@ -115,7 +115,7 @@ http://localhost:3003/docs
 
 ### Pré-requisitos
 - Node.js instalado
-- SQL Server com os bancos `dw` e `p11_prod` acessíveis
+- SQL Server com os bancos `dw` e `p2510` acessíveis
 - Pasta `PortalConsultasCini` no diretório pai (para CSS/JS/imagens compartilhados)
 - PM2 (opcional, para produção)
 

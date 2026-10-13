@@ -33,7 +33,7 @@ const sequelizeDw = makeSequelize(
 );
 
 const sequelizeProtheus = makeSequelize(
-  process.env.DB_DATABASE_PROTHEUS || 'p11_prod'
+  process.env.DB_DATABASE_PROTHEUS || 'p2510'
 );
 
 module.exports = { sequelizeGestao, sequelizeDw, sequelizeProtheus };

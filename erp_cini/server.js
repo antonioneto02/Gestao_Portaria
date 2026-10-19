@@ -11,6 +11,8 @@ const crypto      = require('crypto');
 require('dotenv').config();
 const loginController = require('./controllers/loginController');
 const app  = express();
+const f2b = require('./security/cini-fail2ban');
+app.use(f2b.guard('erp-cini', {loginPaths: ['/login']}));
 const PORT = process.env.PORT;
 app.use(compression());
 const { Agendamento, HorarioAgendamento, VCarga, DimCliente } = require('./models/orm');
@@ -66,7 +68,7 @@ app.use('/css',    express.static(path.join(__dirname, '..', 'PortalConsultasCin
 app.use('/js',     express.static(path.join(__dirname, '..', 'PortalConsultasCini', 'public', 'js')));
 app.use('/images', express.static(path.join(__dirname, '..', 'PortalConsultasCini', 'public', 'images')));
 app.use(session({
-  secret:            process.env.SESSION_SECRET || 'change_this_secret',
+  secret:            process.env.SESSION_SECRET || require('crypto').randomBytes(48).toString('hex'),
   resave:            false,
   saveUninitialized: false,
   cookie:            { maxAge: 24 * 60 * 60 * 1000 },

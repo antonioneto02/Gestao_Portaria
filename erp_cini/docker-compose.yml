@@ -11,6 +11,8 @@ services:
     env_file:
       - .env
     environment:
+      # No Docker o ProtheusAuth e outro container; no PM2 vale o padrao localhost do codigo
+      PROTHEUS_AUTH_INTERNAL_URL: https://protheus-auth:3032
       CERT_DIR: C:/certs
     volumes:
       - ./uploads:C:/app/uploads

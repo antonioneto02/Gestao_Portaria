@@ -45,7 +45,8 @@ jobs:
         run: find . -name '*.js' -not -path './node_modules/*' -print0 | xargs -0 -n1 node --check
 
       - name: Auditoria de dependências
-        run: npx --yes audit-ci@7 --high --skip-dev --allowlist xlsx puppeteer puppeteer-core @puppeteer/browsers basic-ftp extract-zip get-uri pac-proxy-agent proxy-agent whatsapp-web.js nodemon chokidar braces
+        # GHSA-xcx6-jx8p-x3h5 (@azure/msal-node, via mssql/tedious): afeta so o login do Azure AD, que a app nao usa (SQL Server com usuario e senha). A correcao (msal-node 7.1) ainda nao e aceita pelo @azure/identity; tirar daqui quando for.
+        run: npx --yes audit-ci@7 --high --skip-dev --allowlist xlsx puppeteer puppeteer-core @puppeteer/browsers basic-ftp extract-zip get-uri pac-proxy-agent proxy-agent whatsapp-web.js nodemon chokidar braces GHSA-xcx6-jx8p-x3h5
 
       - name: SAST (segurança com ESLint)
         run: npx eslint .

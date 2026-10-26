@@ -1,11 +1,19 @@
 const axios = require("axios");
+const https = require("https");
 const dotenv = require("dotenv");
 const sql = require("mssql");
 const dbConfigDw = require("../config/dbConfigDw");
 
 dotenv.config();
 
-const protheusAuthUrl = process.env.PROTHEUS_AUTH_URL || "https://consultas.cini.com.br:3032";
+const protheusAuthUrl = process.env.PROTHEUS_AUTH_INTERNAL_URL || "https://localhost:3032";
+// Chamada interna (localhost no PM2, container protheus-auth no Docker): o certificado e validado,
+// mas nao o nome dele, que muda conforme o servidor
+const protheusHttpsAgent = new https.Agent({ checkServerIdentity: () => undefined });
+axios.interceptors?.request.use((config) => {
+  if (String(config.url || "").startsWith(protheusAuthUrl)) config.httpsAgent = protheusHttpsAgent;
+  return config;
+});
 
 let _sharedPool = null;
 async function getPool() {

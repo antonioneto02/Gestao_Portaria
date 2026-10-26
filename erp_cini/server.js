@@ -11,6 +11,15 @@ const crypto      = require('crypto');
 require('dotenv').config();
 const loginController = require('./controllers/loginController');
 const app  = express();
+// Endereco do ProtheusAuth para o navegador (protecao.js, reset de senha, CSP). Mesmo padrao do Hub:
+// "localhost" vira o host que o usuario usou, entao o mesmo codigo serve em qualquer servidor
+app.use((req, res, next) => {
+  const url = new URL(process.env.PROTHEUS_AUTH_PUBLIC_URL || 'https://localhost:3032');
+  const hostConfiavel = /^(localhost|\d{1,3}(\.\d{1,3}){3}|([a-z0-9-]+\.)*cini\.com\.br)$/i.test(req.hostname || '');
+  if (['localhost', '127.0.0.1'].includes(url.hostname) && hostConfiavel) url.hostname = req.hostname;
+  res.locals.protheusAuthUrl = url.origin;
+  next();
+});
 const f2b = require('./security/cini-fail2ban');
 app.use(f2b.guard('erp-cini', {loginPaths: ['/login']}));
 const PORT = process.env.PORT;
@@ -189,7 +198,7 @@ app.get('/', (req, res) => {
 
 app.get('/loginPage', (req, res) => {
   const error = req.query.error || null;
-  const protheusAuthUrl = process.env.PROTHEUS_AUTH_URL || "https://consultas.cini.com.br:3032";
+  const protheusAuthUrl = res.locals.protheusAuthUrl;
   res.render('System/loginPage', { error, req, protheusAuthUrl });
 });
 

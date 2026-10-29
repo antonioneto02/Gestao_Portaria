@@ -159,6 +159,17 @@ jobs:
               break
             }
           }
+          # Sem bind mount da pasta do app, o codigo esta DENTRO da imagem (COPY . .):
+          # so reiniciar o processo manteria o codigo antigo.
+          $raiz = ("${{ env.DEPLOY_PATH }}" -replace '\\', '/').TrimEnd('/')
+          $montada = $false
+          $config = docker compose config --format json | ConvertFrom-Json
+          foreach ($svc in $config.services.PSObject.Properties) {
+            foreach ($vol in $svc.Value.volumes) {
+              if ($vol.type -eq 'bind' -and (($vol.source -replace '\\', '/').TrimEnd('/') -ieq $raiz)) { $montada = $true }
+            }
+          }
+          if (-not $montada) { $needsRebuild = $true; Write-Output "Pasta do app nao montada no container -- reconstruindo a imagem." }
           Write-Output "Precisa reconstruir imagem: $needsRebuild"
           Add-Content -Path $env:GITHUB_ENV -Value "NEEDS_REBUILD=$needsRebuild"
 

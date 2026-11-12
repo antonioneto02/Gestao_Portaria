@@ -3,6 +3,7 @@
 const { Op } = require('sequelize');
 const CargaPortaria = require('./orm/CargaPortaria');
 const DimMotorista  = require('./orm/DimMotorista');
+const { contem } = require('../config/dialeto');
 const FILIAL_PADRAO    = '0101-Cini SJP';
 const TIPOS_PRINCIPAIS = ['02-Rota', '01-AS'];
 
@@ -87,9 +88,9 @@ async function getTodayByDtEntrega() {
 async function search({ placa, carga, filial }) {
   try {
     const conditions = [];
-    if (placa)  conditions.push({ placa:  { [Op.like]: `%${placa}%` } });
-    if (carga)  conditions.push({ carga:  { [Op.like]: `%${carga}%` } });
-    if (filial) conditions.push({ filial: { [Op.like]: `%${filial}%` } });
+    if (placa)  conditions.push({ placa:  contem(placa) });
+    if (carga)  conditions.push({ carga:  contem(carga) });
+    if (filial) conditions.push({ filial: contem(filial) });
     if (!conditions.length) return [];
 
     return await CargaPortaria.findAll({

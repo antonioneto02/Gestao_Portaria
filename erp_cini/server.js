@@ -55,6 +55,16 @@ app.use(cookieParser());
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'erp-cini' });
 });
+app.get('/health/banco', async (req, res) => {
+  const { sequelizeGestao } = require('./config/sequelize');
+  const dialeto = sequelizeGestao.getDialect();
+  try {
+    await sequelizeGestao.query(dialeto === 'postgres' ? 'SELECT 1 FROM "VISITANTES" LIMIT 1' : 'SELECT TOP 1 1 AS x FROM [dbo].[VISITANTES]', { type: 'SELECT' });
+    res.json({ ok: true, dialeto });
+  } catch (e) {
+    res.status(503).json({ ok: false, dialeto, erro: 'banco indisponível' });
+  }
+});
 app.use((req, res, next) => {
   try {
     if (req.query && (req.query.sso_token || req.query.sso_refresh)) {

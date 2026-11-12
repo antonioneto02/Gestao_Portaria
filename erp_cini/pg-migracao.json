@@ -1,0 +1,16 @@
+{
+  "app": "erp-cini",
+  "grupo": "portaria",
+  "origem": {
+    "server": "DB_SERVER_ERP",
+    "port": "DB_PORT",
+    "user": "DB_USER_ERP",
+    "password": "DB_PASSWORD_ERP",
+    "database": "DB_DATABASE_GESTAO",
+    "databasePadrao": "gestao_portaria"
+  },
+  "ddl": "database/sql/postgres/create_tables.sql",
+  "tabelas": ["AGENDAMENTO_PORTAL", "CARGAS_PORTARIA", "HORARIOS_AGENDAMENTO", "VISITANTES"],
+  "teste": "node --test --test-concurrency=1 tests/integracao/*.test.js",
+  "health": { "porta": 3003, "caminho": "/health", "banco": "/health/banco", "https": true }
+}

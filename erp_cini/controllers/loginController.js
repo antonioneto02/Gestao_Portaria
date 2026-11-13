@@ -1,7 +1,7 @@
 const axios = require("axios");
 const https = require("https");
 const dotenv = require("dotenv");
-const sql = require("mssql");
+const sql = require('../config/mssqlPg');
 const dbConfigDw = require("../config/dbConfigDw");
 
 dotenv.config();

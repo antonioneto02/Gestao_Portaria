@@ -3,7 +3,7 @@
 const sqlPg = require('./mssqlPg');
 
 const PG = sqlPg.dialeto() === 'postgres';
-const SQL_CATALOGO = `SELECT c.table_name AS t, c.column_name AS c FROM information_schema.columns c
+const SQL_CATALOGO = `SELECT c.table_schema AS s, c.table_name AS t, c.column_name AS c FROM information_schema.columns c
   WHERE c.table_schema NOT IN ('pg_catalog', 'information_schema')`;
 const PARECE_TSQL = /\[[A-Za-z_][\w ]*\]|\bTOP\s*\(?\s*[\d@:]|\bGETDATE\s*\(|\bISNULL\s*\(|\bNOLOCK\b|\bdbo\.|\bNVARCHAR\b|\bOUTPUT\s+INSERTED\b|\bDATEADD\s*\(|\bDATEDIFF\s*\(|\bCONVERT\s*\(|\bLEN\s*\(|\bCHARINDEX\s*\(|@@|\bIIF\s*\(|\bTRY_CONVERT\s*\(|\bTRY_CAST\s*\(|\bMERGE\b|\bOUTER\s+APPLY\b|\bCROSS\s+APPLY\b|\bFORMAT\s*\(|\bYEAR\s*\(|\bMONTH\s*\(|\bDAY\s*\(|\bCOLLATE\b/i;
 
@@ -44,16 +44,19 @@ function criar(Sequelize, { banco: bancoInformado, usuario, senha, host, porta, 
   if (!PG || sqlPg.destinoDaConsulta('', banco).tipo === 'mssql') return new Sequelize(banco, usuario, senha, { host, port: porta ? Number(porta) : undefined, dialect: 'mssql', ...opcoes });
 
   const nome = bancoNoPostgres(banco);
+  const esquemas = sqlPg.modoEsquemas();
+  const bancoPg = esquemas ? process.env.PG_DATABASE : nome;
   const { dialectOptions: _ignorado, ...semDialeto } = opcoes;
-  const instancia = new Sequelize(nome, process.env.PG_USER, process.env.PG_PASSWORD, {
+  const ssl = process.env.PG_SSL === '1' ? { ssl: { rejectUnauthorized: false } } : {};
+  const instancia = new Sequelize(bancoPg, process.env.PG_USER, process.env.PG_PASSWORD, {
     ...semDialeto,
     host: process.env.PG_HOST,
     port: Number(process.env.PG_PORT || 5432),
     dialect: 'postgres',
     timezone: opcoes.timezone || 'America/Sao_Paulo',
-    dialectOptions: process.env.PG_SSL === '1' ? { ssl: { rejectUnauthorized: false } } : {},
+    dialectOptions: esquemas ? { ...ssl, options: `-c search_path="${nome}",public` } : ssl,
     ...opcoesPostgres,
-    hooks: { ...(opcoes.hooks || {}), afterConnect: (conexao) => envolverConexao(conexao, nome) },
+    hooks: { ...(opcoes.hooks || {}), afterConnect: (conexao) => envolverConexao(conexao, bancoPg) },
   });
 
   let legado = null;
@@ -68,7 +71,7 @@ function criar(Sequelize, { banco: bancoInformado, usuario, senha, host, porta, 
     if (typeof texto !== 'string' || (opcoesQuery && (opcoesQuery.model || opcoesQuery.instance))) return queryOriginal(sqlOuObjeto, opcoesQuery);
     const destino = sqlPg.destinoDaConsulta(texto, banco);
     if (destino.tipo === 'mssql') return sqlServer().query(sqlOuObjeto, opcoesQuery);
-    if (destino.banco !== nome) throw new Error(`consulta do banco ${destino.banco} feita pela conexão de ${nome}: use a conexão desse banco`);
+    if (!esquemas && destino.banco !== nome) throw new Error(`consulta do banco ${destino.banco} feita pela conexão de ${nome}: use a conexão desse banco`);
     if (!PARECE_TSQL.test(texto)) return queryOriginal(sqlOuObjeto, opcoesQuery);
     const traduzido = sqlPg.traduzir(texto, {}, '@').filter((c) => !c.startsWith('--ROWCOUNT')).join(';\n');
     return queryOriginal(typeof sqlOuObjeto === 'string' ? traduzido : { ...sqlOuObjeto, query: traduzido }, opcoesQuery);

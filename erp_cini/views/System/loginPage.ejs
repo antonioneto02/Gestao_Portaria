@@ -39,11 +39,20 @@
               </div>
             <% } %>
             <% if (typeof error !== 'undefined' && error === 'password_locked') { %>
+              <script>
+                // senha-expirada-redirect: usuário bloqueado no Protheus = senha expirada. Vai direto para a redefinição e volta para este login.
+                (function () {
+                  var p = new URLSearchParams(window.location.search);
+                  window.location.replace('<%= protheusAuthUrl %>/reset-senha.html?motivo=expirada&username='
+                    + encodeURIComponent(p.get('username') || p.get('usuario') || '')
+                    + '&returnUrl=' + encodeURIComponent(window.location.origin + window.location.pathname));
+                })();
+              </script>
               <div id="passwordLockedAlert" class="alert alert-danger mt-2" role="alert" style="border-left: 4px solid #dc3545;">
                 <div class="d-flex align-items-center">
                   <i class="fas fa-exclamation-triangle me-2" style="font-size: 1.2em;"></i>
                   <div>
-                    <strong>Sua senha foi bloqueada por inatividade!</strong><br>
+                    <strong>Sua senha do Protheus expirou!</strong><br>
                     <small>Solicite a redefinição da sua senha para continuar.</small>
                   </div>
                 </div>
